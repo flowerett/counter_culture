@@ -73,7 +73,7 @@ module CounterCulture
           # if we're provided a custom set of column names with conditions, use them; just use the
           # column name otherwise
           # which class does this relation ultimately point to? that's where we have to start
-          klass = relation_klass(hash[:relation])
+          klass = relation_klass(hash[:relation]) # TODO move it from here
           query = klass
 
           if klass.table_name == self.table_name
@@ -160,52 +160,6 @@ module CounterCulture
         "#{klass.quoted_table_name}.#{klass.quoted_primary_key}"
       end
 
-      # gets the reflect object on the given relation
-      #
-      # relation: a symbol or array of symbols; specifies the relation
-      #   that has the counter cache column
-      def relation_reflect(relation)
-        relation = relation.is_a?(Enumerable) ? relation.dup : [relation]
-
-        # go from one relation to the next until we hit the last reflect object
-        klass = self
-        while relation.size > 0
-          cur_relation = relation.shift
-          reflect = klass.reflect_on_association(cur_relation)
-          raise "No relation #{cur_relation} on #{klass.name}" if reflect.nil?
-          klass = reflect.klass
-        end
-
-        return reflect
-      end
-
-      # gets the class of the given relation
-      #
-      # relation: a symbol or array of symbols; specifies the relation
-      #   that has the counter cache column
-      def relation_klass(relation)
-        relation_reflect(relation).klass
-      end
-
-      # gets the foreign key name of the given relation
-      #
-      # relation: a symbol or array of symbols; specifies the relation
-      #   that has the counter cache column
-      def relation_foreign_key(relation)
-        relation_reflect(relation).foreign_key
-      end
-
-      # gets the foreign key name of the relation. will look at the first
-      # level only -- i.e., if passed an array will consider only its
-      # first element
-      #
-      # relation: a symbol or array of symbols; specifies the relation
-      #   that has the counter cache column
-      def first_level_relation_foreign_key(relation)
-        relation = relation.first if relation.is_a?(Enumerable)
-        relation_reflect(relation).foreign_key
-      end
-
     end
 
     private
@@ -246,7 +200,7 @@ module CounterCulture
     # called by after_update callback
     def _update_counts_after_update
       _wrap_in_counter_culture_active do
-        self.class.after_commit_counter_cache.each do |hash|
+        self.class.after_commit_counter_cache.each do |hash| # TODO figure it out
           # figure out whether the applicable counter cache changed (this can happen
           # with dynamic column names)
           counter_cache_name_was = counter_cache_name_for(previous_model, hash[:counter_cache_name])
@@ -362,21 +316,66 @@ module CounterCulture
       return value.try(:id)
     end
 
-    def relation_klass(relation)
-      self.class.send :relation_klass, relation
-    end
 
-    def relation_reflect(relation)
-      self.class.send :relation_reflect, relation
-    end
+      # gets the reflect object on the given relation
+      #
+      # relation: a symbol or array of symbols; specifies the relation
+      #   that has the counter cache column
+      def relation_reflect(relation) # TODO Maybe it's better to move it to instance methods (especialy for polymorphic assosiations)
+        relation = relation.is_a?(Enumerable) ? relation.dup : [relation]
 
-    def relation_foreign_key(relation)
-      self.class.send :relation_foreign_key, relation
-    end
+        # go from one relation to the next until we hit the last reflect object
+        # sine we use polimorpic assosiations, there is no way to dso it with only class information,
+        # but as we have instance, lets kick it too
+        klass = self.class
+        instance = self
+        while relation.size > 0
+          cur_relation = relation.shift
+          reflect = klass.reflect_on_association(cur_relation)
+          raise "No relation #{cur_relation} on #{klass.name}" if reflect.nil?
+          if reflect.polymorphic?
+            klass = instance.send("#{cur_relation}_type").classify.constatize
+          else
+            klass = reflect.klass
+          end
+          instance = instance.send(cur_relation)
+        end
 
-    def first_level_relation_foreign_key(relation)
-      self.class.send :first_level_relation_foreign_key, relation
-    end
+        return reflect, instance
+      end
+
+      # gets the class of the given relation
+      #
+      # relation: a symbol or array of symbols; specifies the relation
+      #   that has the counter cache column
+      def relation_klass(relation) # TODO same as below
+        reflect, instance = relation_reflect(relation)
+        if reflect.polymorphic? # TODO refactor it
+          klass = instance.send("#{cur_relation}_type").classify.constatize
+        else
+          klass = reflect.klass
+        end
+        klass
+      end
+
+      # gets the foreign key name of the given relation
+      #
+      # relation: a symbol or array of symbols; specifies the relation
+      #   that has the counter cache column
+      def relation_foreign_key(relation)
+        relation_reflect(relation).first.foreign_key
+      end
+
+      # gets the foreign key name of the relation. will look at the first
+      # level only -- i.e., if passed an array will consider only its
+      # first element
+      #
+      # relation: a symbol or array of symbols; specifies the relation
+      #   that has the counter cache column
+      def first_level_relation_foreign_key(relation)
+        relation = relation.first if relation.is_a?(Enumerable)
+        relation_reflect(relation).first.foreign_key
+      end
 
   end
 
