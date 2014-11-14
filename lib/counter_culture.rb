@@ -75,7 +75,7 @@ module CounterCulture
           # if we're provided a custom set of column names with conditions, use them; just use the
           # column name otherwise
           # which class does this relation ultimately point to? that's where we have to start
-          klass = relation_klass(hash[:relation])
+          klass = relation_klass(hash[:relation]) # TODO array of reflection for polymorphic here
           query = klass
 
           if klass.table_name == self.table_name
@@ -85,10 +85,10 @@ module CounterCulture
           end
 
           # if a delta column is provided use SUM, otherwise use COUNT
-          count_select = hash[:delta_column] ? "SUM(COALESCE(#{self_table_name}.#{hash[:delta_column]},0))" : "COUNT(#{self_table_name}.#{self.primary_key})"
+          count_select = hash[:delta_column] ? "SUM(COALESCE(#{self_table_name}.#{hash[:delta_column]},0))" : "COUNT(#{self_table_name}.#{self.primary_key})" # TODO loop here
 
           # respect the deleted_at column if it exists
-          query = query.where("#{self.table_name}.deleted_at IS NULL") if self.column_names.include?('deleted_at')
+          query = query.where("#{self.table_name}.deleted_at IS NULL") if self.column_names.include?('deleted_at') # TODO loop here
 
           column_names = hash[:column_names] || {nil => hash[:counter_cache_name]}
           raise ":column_names must be a Hash of conditions and column names" unless column_names.is_a?(Hash)
@@ -103,7 +103,7 @@ module CounterCulture
 
             joins_query_array = []
             if reflect.polymorphic?
-              polymorphic_relations = reflect.klass.all.group("#{cur_relation}_type").pluck("#{cur_relation}_type")
+              polymorphic_relations = reflect.klass.group("#{cur_relation}_type").pluck("#{cur_relation}_type")
               polymorphic_relations.each do |poly_name|
                 poly_class = poly_name.classify.constatize
                 join_table_name = poly_class.table_name
@@ -176,6 +176,44 @@ module CounterCulture
         "#{klass.quoted_table_name}.#{klass.quoted_primary_key}"
       end
 
+      def relation_reflect(relation)
+        relation = relation.is_a?(Enumerable) ? relation.dup : [relation]
+
+        # go from one relation to the next until we hit the last reflect object
+        # sine we use polimorpic assosiations, there is no way to dso it with only class information,
+        # but as we have instance, lets kick it too
+        klasses = [self]
+        reflects = []
+        while relation.size > 0
+          cur_relation = relation.shift
+          reflects = klasses.map{ |k| k.reflect_on_association(cur_relation)}
+
+          raise "No relation #{cur_relation} on #{klass.name}" if reflect.nil?
+          reflect = reflects.first
+          ok = reflects.all{ |r| r.foriegn_key == reflect.foriegn_key } ||
+          reflects.all{ |r| r.polymorphic? == reflect.polymorphic? }
+          raise "Invalid reliation" unless ok
+          if reflect.polymorphic?
+            klasses = klasses.map { |k| polymorphic_klasses(k, cur_relation) }
+          else
+            klasses = [reflect.klass]
+          end
+          instance = instance.send(cur_relation)
+        end
+
+        return reflects, instance
+      end
+
+    end
+
+    # TODO move to separate module
+    def polymorphic_klasses(klass, cur_relation)
+      klass.group("#{cur_relation}_type").pluck("#{cur_relation}_type")
+    end
+
+    def iterate(relation, klasses)
+      return klasses if relation.size == 0
+      iterate(relation, }.flatten)
     end
 
     private
