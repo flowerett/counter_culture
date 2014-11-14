@@ -142,4 +142,6 @@ ActiveRecord::Schema.define(:version => 20120522160158) do
     t.datetime "created_at", :null => false
     t.datetime "updated_at", :null => false
   end
+
+  todo add here migrations
 end
