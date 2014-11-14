@@ -99,20 +99,33 @@ module CounterCulture
 
           # store joins in an array so that we can later apply column-specific conditions
           joins = reverse_relation.map do |cur_relation|
-            reflect = relation_reflect(cur_relation)
-            if klass.table_name == reflect.active_record.table_name
-              join_table_name = "#{klass.table_name}_#{klass.table_name}"
+            reflect = self.relation_reflect(cur_relation)
+
+            joins_query_array = []
+            if reflect.polymorphic?
+              polymorphic_relations = reflect.klass.all.group("#{cur_relation}_type").pluck("#{cur_relation}_type")
+              polymorphic_relations.each do |poly_name|
+                poly_class = poly_name.classify.constatize
+                join_table_name = poly_class.table_name
+                joins_query = "LEFT JOIN #{reflect.active_record.table_name} AS #{join_table_name} ON #{reflect.table_name}.#{reflect.klass.primary_key} = #{join_table_name}.#{reflect.foreign_key} AND #{reflect.table_name}.#{cur_relation}_type = #{poly_name}"
+                joins_query_array << joins_query
+              end
             else
-              join_table_name = reflect.active_record.table_name
+              if klass.table_name == reflect.active_record.table_name
+                join_table_name = "#{klass.table_name}_#{klass.table_name}"
+              else
+                join_table_name = reflect.active_record.table_name
+              end
+              joins_query = "LEFT JOIN #{reflect.active_record.table_name} AS #{join_table_name} ON #{reflect.table_name}.#{reflect.klass.primary_key} = #{join_table_name}.#{reflect.foreign_key}"
+              # adds 'type' condition to JOIN clause if the current model is a child in a Single Table Inheritance
+              # join with alias to avoid ambiguous table name with self-referential models:
+              joins_query = "#{joins_query} AND #{reflect.active_record.table_name}.type IN ('#{self.name}')" if self.column_names.include?('type') and not(self.descends_from_active_record?)
+              joins_query_array << joins_query
             end
-            # join with alias to avoid ambiguous table name with self-referential models:
-            joins_query = "LEFT JOIN #{reflect.active_record.table_name} AS #{join_table_name} ON #{reflect.table_name}.#{reflect.klass.primary_key} = #{join_table_name}.#{reflect.foreign_key}"
-            # TODO add polimorphic joins
-            polymorphic_relations = reflect.klass.all.group(:group_type).pluck(:group_type)
-            # adds 'type' condition to JOIN clause if the current model is a child in a Single Table Inheritance
-            joins_query = "#{joins_query} AND #{reflect.active_record.table_name}.type IN ('#{self.name}')" if self.column_names.include?('type') and not(self.descends_from_active_record?)
-            joins_query
+            joins_query_array
           end
+
+          joins = joins.flat
 
           # iterate over all the possible counter cache column names
           column_names.each do |where, column_name|
