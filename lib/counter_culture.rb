@@ -52,104 +52,86 @@ module CounterCulture
       #     :wrong => the previously saved, incorrect count,
       #     :right => the newly fixed, correct count }
       #
-      def fetch_options(options = {})
+      def counter_culture_fix_counts(options = {})
+        raise "No counter cache defined on #{self.name}" unless @after_commit_counter_cache
+
         options[:exclude] = [options[:exclude]] if options[:exclude] && !options[:exclude].is_a?(Enumerable)
         options[:exclude] = options[:exclude].try(:map) {|x| x.is_a?(Enumerable) ? x : [x] }
         options[:only] = [options[:only]] if options[:only] && !options[:only].is_a?(Enumerable)
         options[:only] = options[:only].try(:map) {|x| x.is_a?(Enumerable) ? x : [x] }
-        options
-      end
-
-      def move_next?(options = {}, hash)
-        if options[:skip_unsupported]
-          return (hash[:foreign_key_values] || (hash[:counter_cache_name].is_a?(Proc) && !hash[:column_names]))
-        else
-          # TODO provide better errors
-          raise "Fixing counter caches is not supported when using :foreign_key_values; you may skip this relation with :skip_unsupported => true" if hash[:foreign_key_values]
-          raise "Must provide :column_names option for relation #{hash[:relation].inspect} when :column_name is a Proc; you may skip this relation with :skip_unsupported => true" if hash[:counter_cache_name].is_a?(Proc) && !hash[:column_names]
-        end
-        (options[:exclude] && options[:exclude].include?(hash[:relation])) || (options[:only] && !options[:only].include?(hash[:relation]))
-      end
-
-      def self_table_name
-        if klass.table_name == self.table_name
-          "#{self.table_name}_#{self.table_name}" # WTF??
-        else
-          self.table_name
-        end
-      end
-
-      # if a delta column is provided use SUM, otherwise use COUNT
-      def count_select(hash)
-        hash[:delta_column] ? "SUM(COALESCE(#{self_table_name}.#{hash[:delta_column]},0))" : "COUNT(#{self_table_name}.#{self.primary_key})"
-      end
-
-      def build_query(where, column_name, hash)
-        # if we're provided a custom set of column names with conditions, use them; just use the
-        # column name otherwise
-        # which class does this relation ultimately point to? that's where we have to start
-        query = relation_klass(hash[:relation])
-
-        # select id and count (from above) as well as cache column ('column_name') for later comparison
-        query.select("#{klass.table_name}.#{klass.primary_key}, #{count_select} AS count, #{klass.table_name}.#{column_name}")
-        # respect the deleted_at column if it exists
-        query = query.where("#{self.table_name}.deleted_at IS NULL") if self.column_names.include?('deleted_at')
-
-        query = joins(query, where, hash)
-      end
-
-      def joins(query, where, hash)
-        # rewrite as class
-        # we need to work our way back from the end-point of the relation to this class itself;
-        # make a list of arrays pointing to the second-to-last, third-to-last, etc.
-        reverse_relation = (1..hash[:relation].length).to_a.reverse.inject([]) {|a,i| a << hash[:relation][0,i]; a }
-
-        # TODO move to separate method
-        # store joins in an array so that we can later apply column-specific conditions
-        joins = reverse_relation.map do |cur_relation| # TODO
-          reflect = relation_reflect(cur_relation)
-          if klass.table_name == reflect.active_record.table_name
-            join_table_name = "#{klass.table_name}_#{klass.table_name}"
-          else
-            join_table_name = reflect.active_record.table_name
-          end
-          # join with alias to avoid ambiguous table name with self-referential models:
-          joins_query = "LEFT JOIN #{reflect.active_record.table_name} AS #{join_table_name} ON #{reflect.table_name}.#{reflect.klass.primary_key} = #{join_table_name}.#{reflect.foreign_key}"
-          # adds 'type' condition to JOIN clause if the current model is a child in a Single Table Inheritance
-          joins_query = "#{joins_query} AND #{reflect.active_record.table_name}.type IN ('#{self.name}')" if self.column_names.include?('type') and not(self.descends_from_active_record?)
-          joins_query
-        end
-
-        # we need to join together tables until we get back to the table this class itself lives in
-        # conditions must also be applied to the join on which we are counting
-        joins.each_with_index do |join,index|
-          join += " AND (#{sanitize_sql_for_conditions(where)})" if index == joins.size - 1 && where # WTF??0
-          query = query.joins(join)
-        end
-          query
-      end
-
-      def counter_culture_fix_counts(options = {})
-        raise "No counter cache defined on #{self.name}" unless @after_commit_counter_cache
-
-        options = fetch_options(options)
 
         fixed = []
-        @after_commit_counter_cache.each do |hash| # TODO find a better patern
-          next if move_next?(options = {})
+        @after_commit_counter_cache.each do |hash|
+          next if options[:exclude] && options[:exclude].include?(hash[:relation])
+          next if options[:only] && !options[:only].include?(hash[:relation])
 
-          count_select = count_select(hash)
+          if options[:skip_unsupported]
+            next if (hash[:foreign_key_values] || (hash[:counter_cache_name].is_a?(Proc) && !hash[:column_names]))
+          else
+            raise "Fixing counter caches is not supported when using :foreign_key_values; you may skip this relation with :skip_unsupported => true" if hash[:foreign_key_values]
+            raise "Must provide :column_names option for relation #{hash[:relation].inspect} when :column_name is a Proc; you may skip this relation with :skip_unsupported => true" if hash[:counter_cache_name].is_a?(Proc) && !hash[:column_names]
+          end
+
+          # if we're provided a custom set of column names with conditions, use them; just use the
+          # column name otherwise
+          # which class does this relation ultimately point to? that's where we have to start
+          klass = relation_klass(hash[:relation])
+          query = klass
+
+          if klass.table_name == self.table_name
+            self_table_name = "#{self.table_name}_#{self.table_name}"
+          else
+            self_table_name = self.table_name
+          end
+
+          # if a delta column is provided use SUM, otherwise use COUNT
+          count_select = hash[:delta_column] ? "SUM(COALESCE(#{self_table_name}.#{hash[:delta_column]},0))" : "COUNT(#{self_table_name}.#{self.primary_key})"
+
+          # respect the deleted_at column if it exists
+          query = query.where("#{self.table_name}.deleted_at IS NULL") if self.column_names.include?('deleted_at')
+
+          column_names = hash[:column_names] || {nil => hash[:counter_cache_name]}
+          raise ":column_names must be a Hash of conditions and column names" unless column_names.is_a?(Hash)
+
+          # we need to work our way back from the end-point of the relation to this class itself;
+          # make a list of arrays pointing to the second-to-last, third-to-last, etc.
+          reverse_relation = (1..hash[:relation].length).to_a.reverse.inject([]) {|a,i| a << hash[:relation][0,i]; a }
+
+          # store joins in an array so that we can later apply column-specific conditions
+          joins = reverse_relation.map do |cur_relation|
+            reflect = relation_reflect(cur_relation)
+            if klass.table_name == reflect.active_record.table_name
+              join_table_name = "#{klass.table_name}_#{klass.table_name}"
+            else
+              join_table_name = reflect.active_record.table_name
+            end
+            # join with alias to avoid ambiguous table name with self-referential models:
+            joins_query = "LEFT JOIN #{reflect.active_record.table_name} AS #{join_table_name} ON #{reflect.table_name}.#{reflect.klass.primary_key} = #{join_table_name}.#{reflect.foreign_key}"
+            # TODO add polimorphic joins
+            polymorphic_relations = reflect.klass.all.group(:group_type).pluck(:group_type)
+            # adds 'type' condition to JOIN clause if the current model is a child in a Single Table Inheritance
+            joins_query = "#{joins_query} AND #{reflect.active_record.table_name}.type IN ('#{self.name}')" if self.column_names.include?('type') and not(self.descends_from_active_record?)
+            joins_query
+          end
 
           # iterate over all the possible counter cache column names
           column_names.each do |where, column_name|
+            # select id and count (from above) as well as cache column ('column_name') for later comparison
+            counts_query = query.select("#{klass.table_name}.#{klass.primary_key}, #{count_select} AS count, #{klass.table_name}.#{column_name}")
 
+            # we need to join together tables until we get back to the table this class itself lives in
+            # conditions must also be applied to the join on which we are counting
+            joins.each_with_index do |join,index|
+              join += " AND (#{sanitize_sql_for_conditions(where)})" if index == joins.size - 1 && where
+              counts_query = counts_query.joins(join)
+            end
 
             # iterate in batches; otherwise we might run out of memory when there's a lot of
             # instances and we try to load all their counts at once
             start = 0
             batch_size = options[:batch_size] || 1000
 
-            while (records = build_query(where, column_name, hash).reorder(full_primary_key(klass) + " ASC").offset(start).limit(batch_size).group(full_primary_key(klass)).to_a).any?
+            while (records = counts_query.reorder(full_primary_key(klass) + " ASC").offset(start).limit(batch_size).group(full_primary_key(klass)).to_a).any?
               # now iterate over all the models and see whether their counts are right
               records.each do |model|
                 count = model.read_attribute('count') || 0
@@ -175,7 +157,6 @@ module CounterCulture
 
         return fixed
       end
-
       private
       # the string to pass to order() in order to sort by primary key
       def full_primary_key(klass)
