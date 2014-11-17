@@ -29,18 +29,18 @@ describe "CounterCulture" do
     user = User.create
     product = Product.create
 
-    user.reviews_count.should == 0
-    product.reviews_count.should == 0
-    user.review_approvals_count.should == 0
+    expect(user.reviews_count).to eq 0
+    expect(product.reviews_count).to eq 0
+    expect(user.review_approvals_count).to eq 0
 
     review = Review.create :user_id => user.id, :product_id => product.id, :approvals => 69
 
     user.reload
     product.reload
 
-    user.reviews_count.should == 1
-    product.reviews_count.should == 1
-    user.review_approvals_count.should == 69
+    expect(user.reviews_count).to eq 1
+    expect(product.reviews_count).to eq 1
+    expect(user.review_approvals_count).to eq 69
 
     user.reviews_count = 0
     product.reviews_count = 2
@@ -49,31 +49,31 @@ describe "CounterCulture" do
     product.save!
 
     fixed = Review.counter_culture_fix_counts :skip_unsupported => true
-    fixed.length.should == 3
+    expect(fixed.length).to eq 3
 
     user.reload
     product.reload
 
-    user.reviews_count.should == 1
-    product.reviews_count.should == 1
-    user.review_approvals_count.should == 69
+    expect(user.reviews_count).to eq 1
+    expect(product.reviews_count).to eq 1
+    expect(user.review_approvals_count).to eq 69
   end
 
   it "should fix where the count should go back to zero correctly" do
     user = User.create
     product = Product.create
 
-    user.reviews_count.should == 0
+    expect(user.reviews_count).to eq 0
 
     user.reviews_count = -1
     user.save!
 
     fixed = Review.counter_culture_fix_counts :skip_unsupported => true
-    fixed.length.should == 1
+    expect(fixed.length).to eq 1
 
     user.reload
 
-    user.reviews_count.should == 0
+    expect(user.reviews_count).to eq 0
 
   end
 
@@ -82,7 +82,7 @@ describe "CounterCulture" do
     user = User.create :manages_company_id => company.id
     product = Product.create
 
-    product.twitter_reviews_count.should == 0
+    expect(product.twitter_reviews_count).to eq 0
 
     review = Review.create :user_id => user.id, :product_id => product.id, :approvals => 42
     twitter_review = TwitterReview.create :user_id => user.id, :product_id => product.id, :approvals => 32
@@ -91,7 +91,7 @@ describe "CounterCulture" do
     user.reload
     product.reload
 
-    product.twitter_reviews_count.should == 1
+    expect(product.twitter_reviews_count).to eq 1
 
     product.twitter_reviews_count = 2
     product.save!
@@ -100,7 +100,7 @@ describe "CounterCulture" do
 
     product.reload
 
-    product.twitter_reviews_count.should == 1
+    expect(product.twitter_reviews_count).to eq 1
   end
 
   it "should fix a second-level counter cache correctly" do
@@ -108,10 +108,10 @@ describe "CounterCulture" do
     user = User.create :manages_company_id => company.id
     product = Product.create
 
-    company.reviews_count.should == 0
-    user.reviews_count.should == 0
-    product.reviews_count.should == 0
-    company.review_approvals_count.should == 0
+    expect(company.reviews_count).to eq 0
+    expect(user.reviews_count).to eq 0
+    expect(product.reviews_count).to eq 0
+    expect(company.review_approvals_count).to eq 0
 
     review = Review.create :user_id => user.id, :product_id => product.id, :approvals => 42
 
@@ -119,10 +119,10 @@ describe "CounterCulture" do
     user.reload
     product.reload
 
-    company.reviews_count.should == 1
-    user.reviews_count.should == 1
-    product.reviews_count.should == 1
-    company.review_approvals_count.should == 42
+    expect(company.reviews_count).to eq 1
+    expect(user.reviews_count).to eq 1
+    expect(product.reviews_count).to eq 1
+    expect(company.review_approvals_count).to eq 42
 
     company.reviews_count = 2
     company.review_approvals_count = 7
@@ -137,23 +137,23 @@ describe "CounterCulture" do
     user.reload
     product.reload
 
-    company.reviews_count.should == 1
-    user.reviews_count.should == 1
-    product.reviews_count.should == 1
-    company.review_approvals_count.should == 42
+    expect(company.reviews_count).to eq 1
+    expect(user.reviews_count).to eq 1
+    expect(product.reviews_count).to eq 1
+    expect(company.review_approvals_count).to eq 42
   end
 
   it "should fix a custom counter cache correctly" do
     user = User.create
     product = Product.create
 
-    product.rexiews_count.should == 0
+    expect(product.rexiews_count).to eq 0
 
     review = Review.create :user_id => user.id, :product_id => product.id
 
     product.reload
 
-    product.rexiews_count.should == 1
+    expect(product.rexiews_count).to eq 1
 
     product.rexiews_count = 2
     product.save!
@@ -161,29 +161,29 @@ describe "CounterCulture" do
     Review.counter_culture_fix_counts :skip_unsupported => true
 
     product.reload
-    product.rexiews_count.should == 1
+    expect(product.rexiews_count).to eq 1
   end
 
   it "should fix a dynamic counter cache correctly" do
     user = User.create
     product = Product.create
 
-    user.using_count.should == 0
-    user.tried_count.should == 0
+    expect(user.using_count).to eq 0
+    expect(user.tried_count).to eq 0
 
     review_using = Review.create :user_id => user.id, :product_id => product.id, :review_type => 'using'
 
     user.reload
 
-    user.using_count.should == 1
-    user.tried_count.should == 0
+    expect(user.using_count).to eq 1
+    expect(user.tried_count).to eq 0
 
     review_tried = Review.create :user_id => user.id, :product_id => product.id, :review_type => 'tried'
 
     user.reload
 
-    user.using_count.should == 1
-    user.tried_count.should == 1
+    expect(user.using_count).to eq 1
+    expect(user.tried_count).to eq 1
 
     user.using_count = 2
     user.tried_count = 3
@@ -193,8 +193,8 @@ describe "CounterCulture" do
 
     user.reload
 
-    user.using_count.should == 1
-    user.tried_count.should == 1
+    expect(user.using_count).to eq 1
+    expect(user.tried_count).to eq 1
   end
 
   it "should fix a string counter cache correctly" do
@@ -203,23 +203,23 @@ describe "CounterCulture" do
     user = User.create :has_string_id_id => string_id.id
 
     string_id.reload
-    string_id.users_count.should == 1
+    expect(string_id.users_count).to eq 1
 
     user2 = User.create :has_string_id_id => string_id.id
 
     string_id.reload
-    string_id.users_count.should == 2
+    expect(string_id.users_count).to eq 2
 
     string_id.users_count = 123
     string_id.save!
 
     string_id.reload
-    string_id.users_count.should == 123
+    expect(string_id.users_count).to eq 123
 
     User.counter_culture_fix_counts
 
     string_id.reload
-    string_id.users_count.should == 2
+    expect(string_id.users_count).to eq 2
   end
 
   it "should correctly fix float values that came out of sync" do
@@ -233,7 +233,7 @@ describe "CounterCulture" do
     Review.counter_culture_fix_counts skip_unsupported: true
 
     user.reload
-    user.review_value_sum.round(1).should == 15.6
+    expect(user.review_value_sum.round(1)).to eq 15.6
 
     r2.destroy
 
@@ -241,7 +241,7 @@ describe "CounterCulture" do
     Review.counter_culture_fix_counts skip_unsupported: true
 
     user.reload
-    user.review_value_sum.round(1).should == 8.4
+    expect(user.review_value_sum.round(1)).to eq 8.4
 
     r3.destroy
 
@@ -249,7 +249,7 @@ describe "CounterCulture" do
     Review.counter_culture_fix_counts skip_unsupported: true
 
     user.reload
-    user.review_value_sum.round(1).should == 3.4
+    expect(user.review_value_sum.round(1)).to eq 3.4
 
     r1.destroy
 
@@ -257,7 +257,7 @@ describe "CounterCulture" do
     Review.counter_culture_fix_counts skip_unsupported: true
 
     user.reload
-    user.review_value_sum.round(1).should == 0
+    expect(user.review_value_sum.round(1)).to eq 0
   end
 
   it "should use relation primary key on counter destination table correctly when fixing counts" do
@@ -271,8 +271,8 @@ describe "CounterCulture" do
 
     fixed = Post.counter_culture_fix_counts :only => :subcateg
 
-    fixed.length.should == 1
-    subcateg.reload.posts_count.should == 1
+    expect(fixed.length).to eq 1
+    expect(subcateg.reload.posts_count).to eq 1
   end
 
   it "should use primary key on counted records table correctly when fixing counts" do
@@ -287,8 +287,8 @@ describe "CounterCulture" do
     post.save!
 
     fixed = PostComment.counter_culture_fix_counts
-    fixed.length.should == 1
-    post.reload.comments_count.should == 1
+    expect(fixed.length).to eq 1
+    expect(post.reload.comments_count).to eq 1
   end
 
 
@@ -307,8 +307,8 @@ describe "CounterCulture" do
 
     fixed = Post.counter_culture_fix_counts :only => [[:subcateg, :categ]]
 
-    fixed.length.should == 1
-    categ.reload.posts_count.should == 1
+    expect(fixed.length).to eq 1
+    expect(categ.reload.posts_count).to eq 1
   end
 
   it "should correctly fix the counter caches for thousands of records when counter is conditional" do
@@ -321,12 +321,12 @@ describe "CounterCulture" do
       3.times { main.conditional_dependents.create(:condition => main.id % 2 == 0) }
     end
 
-    ConditionalMain.find_each { |main| main.conditional_dependents_count.should == (main.id % 2 == 0 ? 3 : 0) }
+    ConditionalMain.find_each { |main| expect(main.conditional_dependents_count).to eq(main.id % 2 == 0 ? 3 : 0) }
 
     ConditionalMain.order('random()').limit(50).update_all :conditional_dependents_count => 1
     ConditionalDependent.counter_culture_fix_counts :batch_size => 100
 
-    ConditionalMain.find_each { |main| main.conditional_dependents_count.should == (main.id % 2 == 0 ? 3 : 0) }
+    ConditionalMain.find_each { |main| expect(main.conditional_dependents_count).to eq(main.id % 2 == 0 ? 3 : 0) }
   end
 
   it "should correctly fix the counter caches when no dependent record exists for some of main records" do
@@ -339,12 +339,12 @@ describe "CounterCulture" do
       (main.id % 4).times { main.simple_dependents.create }
     end
 
-    SimpleMain.find_each { |main| main.simple_dependents_count.should == main.id % 4 }
+    SimpleMain.find_each { |main| expect(main.simple_dependents_count).to eq main.id % 4 }
 
     SimpleMain.order('random()').limit(50).update_all simple_dependents_count: 1
     SimpleDependent.counter_culture_fix_counts :batch_size => 100
 
-    SimpleMain.find_each { |main| main.simple_dependents_count.should == main.id % 4 }
+    SimpleMain.find_each { |main| expect(main.simple_dependents_count).to eq main.id % 4 }
   end
 
   it "should correctly fix the counter caches with thousands of records" do
@@ -357,12 +357,12 @@ describe "CounterCulture" do
       3.times { main.simple_dependents.create }
     end
 
-    SimpleMain.find_each { |main| main.simple_dependents_count.should == 3 }
+    SimpleMain.find_each { |main| expect(main.simple_dependents_count).to eq 3 }
 
     SimpleMain.order('random()').limit(50).update_all simple_dependents_count: 1
     SimpleDependent.counter_culture_fix_counts :batch_size => 100
 
-    SimpleMain.find_each { |main| main.simple_dependents_count.should == 3 }
+    SimpleMain.find_each { |main| expect(main.simple_dependents_count).to eq 3 }
   end
 
   it "should raise a good error message when calling fix_counts with no caches defined" do
@@ -378,8 +378,8 @@ describe "CounterCulture" do
       company.save!
 
       fixed = Company.counter_culture_fix_counts
-      fixed.length.should == 1
-      company.reload.children_count.should == 1
+      expect(fixed.length).to eq 1
+      expect(company.reload.children_count).to eq 1
     end
   end
 end

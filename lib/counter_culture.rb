@@ -25,8 +25,6 @@ module CounterCulture
           @after_commit_counter_cache = []
         end
 
-        column_names = options[:column_name] || {nil => (options[:column_name] || "#{name.tableize}_count")} # TODO make it dry
-        raise ":column_names must be a Hash of conditions and column names" unless column_names.is_a?(Hash) # TODO find better usage of raise
         # add the current information to our list
         @after_commit_counter_cache<< {
           :relation => relation.is_a?(Enumerable) ? relation : [relation],
@@ -99,12 +97,11 @@ module CounterCulture
 
           # store joins in an array so that we can later apply column-specific conditions
           joins = reverse_relation.map do |cur_relation|
-            reflect = self.relation_reflect(cur_relation)
+            reflects, klasses = self.relation_reflect(cur_relation)
 
             joins_query_array = []
             if reflect.polymorphic?
-              polymorphic_relations = reflect.klass.group("#{cur_relation}_type").pluck("#{cur_relation}_type")
-              polymorphic_relations.each do |poly_name|
+              klasses.each do |poly_name|
                 poly_class = poly_name.classify.constatize
                 join_table_name = poly_class.table_name
                 joins_query = "LEFT JOIN #{reflect.active_record.table_name} AS #{join_table_name} ON #{reflect.table_name}.#{reflect.klass.primary_key} = #{join_table_name}.#{reflect.foreign_key} AND #{reflect.table_name}.#{cur_relation}_type = #{poly_name}"
@@ -180,8 +177,6 @@ module CounterCulture
         relation = relation.is_a?(Enumerable) ? relation.dup : [relation]
 
         # go from one relation to the next until we hit the last reflect object
-        # sine we use polimorpic assosiations, there is no way to dso it with only class information,
-        # but as we have instance, lets kick it too
         klasses = [self]
         reflects = []
         while relation.size > 0
@@ -190,31 +185,25 @@ module CounterCulture
 
           raise "No relation #{cur_relation} on #{klass.name}" if reflect.nil?
           reflect = reflects.first
-          ok = reflects.all{ |r| r.foriegn_key == reflect.foriegn_key } ||
-          reflects.all{ |r| r.polymorphic? == reflect.polymorphic? }
-          raise "Invalid reliation" unless ok
+          ok = reflects.all{ |r| r.foriegn_key == reflect.foriegn_key } || reflects.all{ |r| r.polymorphic? == reflect.polymorphic? }
+          raise "Invalid relation" unless ok
           if reflect.polymorphic?
             klasses = klasses.map { |k| polymorphic_klasses(k, cur_relation) }
           else
             klasses = [reflect.klass]
           end
-          instance = instance.send(cur_relation)
         end
 
-        return reflects, instance
+        return reflects, klasses
+      end
+
+      # TODO move to separate module
+      def polymorphic_klasses(klass, cur_relation)
+        klass.group("#{cur_relation}_type").pluck("#{cur_relation}_type")
       end
 
     end
 
-    # TODO move to separate module
-    def polymorphic_klasses(klass, cur_relation)
-      klass.group("#{cur_relation}_type").pluck("#{cur_relation}_type")
-    end
-
-    def iterate(relation, klasses)
-      return klasses if relation.size == 0
-      iterate(relation, }.flatten)
-    end
 
     private
     # need to make sure counter_culture is only activated once
@@ -392,6 +381,7 @@ module CounterCulture
           else
             klass = reflect.klass
           end
+          # It'll execute a SQL query
           instance = instance.send(cur_relation)
         end
 
