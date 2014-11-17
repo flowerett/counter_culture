@@ -382,9 +382,10 @@ module CounterCulture
           raise "No relation #{cur_relation} on #{klass.name}" if reflect.nil?
           # Check if relation polymorphic and get through instance klass of relation
           if reflect.polymorphic?
-            method = was ? "#{cur_relation}_type_was" : "#{cur_relation}_type"
-            klass = instance.send(method).classify.constantize
-            instance = instance.send("#{cur_relation}")
+            type_method = was ? "#{reflect.foreign_type}_was" : "#{reflect.foreign_type}"
+            id_method = was ? "#{reflect.foreign_key}_was" : "#{reflect.foreign_key}"
+            klass = instance.send(type_method).classify.constantize
+            instance = klass.find_by(klass.primary_key => instance.send(id_method))
           else
             klass = reflect.klass
           end
