@@ -73,101 +73,103 @@ module CounterCulture
           # if we're provided a custom set of column names with conditions, use them; just use the
           # column name otherwise
           # which class does this relation ultimately point to? that's where we have to start
-          klass = relation_klass(hash[:relation]) # TODO array of reflection for polymorphic here
-          query = klass
+          klasses = relation_klass(hash[:relation]) # TODO array of reflection for polymorphic here
+          klasses.each do |klass|
+            query = klass
 
-          if klass.table_name == self.table_name
-            self_table_name = "#{self.table_name}_#{self.table_name}"
-          else
-            self_table_name = self.table_name
-          end
+            if klass.table_name == self.table_name
+              self_table_name = "#{self.table_name}_#{self.table_name}"
+            else
+              self_table_name = self.table_name
+            end
 
-          # if a delta column is provided use SUM, otherwise use COUNT
-          count_select = hash[:delta_column] ? "SUM(COALESCE(#{self_table_name}.#{hash[:delta_column]},0))" : "COUNT(#{self_table_name}.#{self.primary_key})" # TODO loop here
+            # if a delta column is provided use SUM, otherwise use COUNT
+            count_select = hash[:delta_column] ? "SUM(COALESCE(#{self_table_name}.#{hash[:delta_column]},0))" : "COUNT(#{self_table_name}.#{self.primary_key})" # TODO loop here
 
-          # respect the deleted_at column if it exists
-          query = query.where("#{self.table_name}.deleted_at IS NULL") if self.column_names.include?('deleted_at') # TODO loop here
+            # respect the deleted_at column if it exists
+            query = query.where("#{self.table_name}.deleted_at IS NULL") if self.column_names.include?('deleted_at') # TODO loop here
 
-          column_names = hash[:column_names] || {nil => hash[:counter_cache_name]}
-          raise ":column_names must be a Hash of conditions and column names" unless column_names.is_a?(Hash)
+            column_names = hash[:column_names] || {nil => hash[:counter_cache_name]}
+            raise ":column_names must be a Hash of conditions and column names" unless column_names.is_a?(Hash)
 
-          # we need to work our way back from the end-point of the relation to this class itself;
-          # make a list of arrays pointing to the second-to-last, third-to-last, etc.
-          reverse_relation = (1..hash[:relation].length).to_a.reverse.inject([]) {|a,i| a << hash[:relation][0,i]; a }
+            # we need to work our way back from the end-point of the relation to this class itself;
+            # make a list of arrays pointing to the second-to-last, third-to-last, etc.
+            reverse_relation = (1..hash[:relation].length).to_a.reverse.inject([]) {|a,i| a << hash[:relation][0,i]; a }
 
-          # store joins in an array so that we can later apply column-specific conditions
-          joins = reverse_relation.map do |cur_relation|
-            reflects, klasses = self.relation_reflect(cur_relation)
+            # store joins in an array so that we can later apply column-specific conditions
+            joins = reverse_relation.map do |cur_relation|
+              reflect, klasses = self.relation_reflect(cur_relation)
 
-            joins_query_array = []
-            if reflect.polymorphic?
-              klasses.each do |poly_name|
-                poly_class = poly_name.classify.constatize
-                join_table_name = poly_class.table_name
-                joins_query = "LEFT JOIN #{reflect.active_record.table_name} AS #{join_table_name} ON #{reflect.table_name}.#{reflect.klass.primary_key} = #{join_table_name}.#{reflect.foreign_key} AND #{reflect.table_name}.#{cur_relation}_type = #{poly_name}"
+              joins_query_array = []
+              if reflect.polymorphic?
+                klasses.each do |poly_name|
+                  poly_class = poly_name.classify.constatize
+                  join_table_name = poly_class.table_name
+                  joins_query = "LEFT JOIN #{reflect.active_record.table_name} AS #{join_table_name} ON #{reflect.table_name}.#{reflect.klass.primary_key} = #{join_table_name}.#{reflect.foreign_key} AND #{reflect.table_name}.#{cur_relation}_type = #{poly_name}"
+                  joins_query_array << joins_query
+                end
+              else
+                if klass.table_name == reflect.active_record.table_name
+                  join_table_name = "#{klass.table_name}_#{klass.table_name}"
+                else
+                  join_table_name = reflect.active_record.table_name
+                end
+                joins_query = "LEFT JOIN #{reflect.active_record.table_name} AS #{join_table_name} ON #{reflect.table_name}.#{reflect.klass.primary_key} = #{join_table_name}.#{reflect.foreign_key}"
+                # adds 'type' condition to JOIN clause if the current model is a child in a Single Table Inheritance
+                # join with alias to avoid ambiguous table name with self-referential models:
+                joins_query = "#{joins_query} AND #{reflect.active_record.table_name}.type IN ('#{self.name}')" if self.column_names.include?('type') and not(self.descends_from_active_record?)
                 joins_query_array << joins_query
               end
-            else
-              if klass.table_name == reflect.active_record.table_name
-                join_table_name = "#{klass.table_name}_#{klass.table_name}"
-              else
-                join_table_name = reflect.active_record.table_name
+              joins_query_array
+            end
+
+            joins = joins.flatten
+
+            # iterate over all the possible counter cache column names
+            column_names.each do |where, column_name|
+              # select id and count (from above) as well as cache column ('column_name') for later comparison
+              counts_query = query.select("#{klass.table_name}.#{klass.primary_key}, #{count_select} AS count, #{klass.table_name}.#{column_name}")
+
+              # we need to join together tables until we get back to the table this class itself lives in
+              # conditions must also be applied to the join on which we are counting
+              joins.each_with_index do |join,index|
+                join += " AND (#{sanitize_sql_for_conditions(where)})" if index == joins.size - 1 && where
+                counts_query = counts_query.joins(join)
               end
-              joins_query = "LEFT JOIN #{reflect.active_record.table_name} AS #{join_table_name} ON #{reflect.table_name}.#{reflect.klass.primary_key} = #{join_table_name}.#{reflect.foreign_key}"
-              # adds 'type' condition to JOIN clause if the current model is a child in a Single Table Inheritance
-              # join with alias to avoid ambiguous table name with self-referential models:
-              joins_query = "#{joins_query} AND #{reflect.active_record.table_name}.type IN ('#{self.name}')" if self.column_names.include?('type') and not(self.descends_from_active_record?)
-              joins_query_array << joins_query
-            end
-            joins_query_array
-          end
 
-          joins = joins.flat
+              # iterate in batches; otherwise we might run out of memory when there's a lot of
+              # instances and we try to load all their counts at once
+              start = 0
+              batch_size = options[:batch_size] || 1000
 
-          # iterate over all the possible counter cache column names
-          column_names.each do |where, column_name|
-            # select id and count (from above) as well as cache column ('column_name') for later comparison
-            counts_query = query.select("#{klass.table_name}.#{klass.primary_key}, #{count_select} AS count, #{klass.table_name}.#{column_name}")
-
-            # we need to join together tables until we get back to the table this class itself lives in
-            # conditions must also be applied to the join on which we are counting
-            joins.each_with_index do |join,index|
-              join += " AND (#{sanitize_sql_for_conditions(where)})" if index == joins.size - 1 && where
-              counts_query = counts_query.joins(join)
-            end
-
-            # iterate in batches; otherwise we might run out of memory when there's a lot of
-            # instances and we try to load all their counts at once
-            start = 0
-            batch_size = options[:batch_size] || 1000
-
-            while (records = counts_query.reorder(full_primary_key(klass) + " ASC").offset(start).limit(batch_size).group(full_primary_key(klass)).to_a).any?
-              # now iterate over all the models and see whether their counts are right
-              records.each do |model|
-                count = model.read_attribute('count') || 0
-                if model.read_attribute(column_name) != count
-                  # keep track of what we fixed, e.g. for a notification email
-                  fixed<< {
-                    :entity => klass.name,
-                    klass.primary_key.to_sym => model.send(klass.primary_key),
-                    :what => column_name,
-                    :wrong => model.send(column_name),
-                    :right => count
-                  }
-                  # use update_all because it's faster and because a fixed counter-cache shouldn't
-                  # update the timestamp
-                  klass.where(klass.primary_key => model.send(klass.primary_key)).update_all(column_name => count)
+              while (records = counts_query.reorder(full_primary_key(klass) + " ASC").offset(start).limit(batch_size).group(full_primary_key(klass)).to_a).any?
+                # now iterate over all the models and see whether their counts are right
+                records.each do |model|
+                  count = model.read_attribute('count') || 0
+                  if model.read_attribute(column_name) != count
+                    # keep track of what we fixed, e.g. for a notification email
+                    fixed<< {
+                      :entity => klass.name,
+                      klass.primary_key.to_sym => model.send(klass.primary_key),
+                      :what => column_name,
+                      :wrong => model.send(column_name),
+                      :right => count
+                    }
+                    # use update_all because it's faster and because a fixed counter-cache shouldn't
+                    # update the timestamp
+                    klass.where(klass.primary_key => model.send(klass.primary_key)).update_all(column_name => count)
+                  end
                 end
-              end
 
-              start += batch_size
+                start += batch_size
+              end
             end
           end
         end
 
         return fixed
       end
-      private
+
       # the string to pass to order() in order to sort by primary key
       def full_primary_key(klass)
         "#{klass.quoted_table_name}.#{klass.quoted_primary_key}"
@@ -182,10 +184,9 @@ module CounterCulture
         while relation.size > 0
           cur_relation = relation.shift
           reflects = klasses.map{ |k| k.reflect_on_association(cur_relation)}
-
-          raise "No relation #{cur_relation} on #{klass.name}" if reflect.nil?
+          raise "No relation #{cur_relation} on #{klass.name}" if reflects.compact.size != klasses.size
           reflect = reflects.first
-          ok = reflects.all{ |r| r.foriegn_key == reflect.foriegn_key } || reflects.all{ |r| r.polymorphic? == reflect.polymorphic? }
+          ok = reflects.all?{ |r| r.foreign_key == reflect.foreign_key } || reflects.all?{ |r| r.polymorphic? == reflect.polymorphic? }
           raise "Invalid relation" unless ok
           if reflect.polymorphic?
             klasses = klasses.map { |k| polymorphic_klasses(k, cur_relation) }
@@ -194,13 +195,21 @@ module CounterCulture
           end
         end
 
-        return reflects, klasses
+        return reflect, klasses
       end
+
+      def relation_klass(relation) # TODO same as below
+        reflect, klasses = relation_reflect(relation)
+        klasses
+      end
+
+      private
 
       # TODO move to separate module
       def polymorphic_klasses(klass, cur_relation)
         klass.group("#{cur_relation}_type").pluck("#{cur_relation}_type")
       end
+
 
     end
 
@@ -248,13 +257,13 @@ module CounterCulture
           # with dynamic column names)
           counter_cache_name_was = counter_cache_name_for(previous_model, hash[:counter_cache_name])
           counter_cache_name = counter_cache_name_for(self, hash[:counter_cache_name])
-
           if send("#{first_level_relation_foreign_key(hash[:relation])}_changed?") ||
             (hash[:delta_column] && send("#{hash[:delta_column]}_changed?")) ||
-            counter_cache_name != counter_cache_name_was
+            counter_cache_name != counter_cache_name_was ||
+            (first_polymorphic?(hash[:relation]) && send("#{hash[:relation].first.to_s}_type_changed?"))
 
             # increment the counter cache of the new value
-            change_counter_cache(hash.merge(:increment => true, :counter_column => counter_cache_name))
+            change_counter_cache(hash.merge(:increment => true, :counter_column => counter_cache_name)) # unless try(:deleted_at_changed?)
             # decrement the counter cache of the old value
             change_counter_cache(hash.merge(:increment => false, :was => true, :counter_column => counter_cache_name_was))
           end
@@ -279,7 +288,7 @@ module CounterCulture
       id_to_change = foreign_key_value(options[:relation], options[:was])
       # allow overwriting of foreign key value by the caller
       id_to_change = options[:foreign_key_values].call(id_to_change) if options[:foreign_key_values]
-
+      klass = relation_klass(options[:relation], options[:was])
       if id_to_change && options[:counter_column]
         delta_magnitude = if options[:delta_column]
                             delta_attr_name = options[:was] ? "#{options[:delta_column]}_was" : options[:delta_column]
@@ -296,7 +305,7 @@ module CounterCulture
 
           updates = []
           # this updates the actual counter
-          updates << "#{quoted_column} = COALESCE(#{quoted_column}, 0) #{operator} #{delta_magnitude}" # TODO remove if nessesary
+          updates << "#{quoted_column} = COALESCE(#{quoted_column}, 0) #{operator} #{delta_magnitude}"
           # and here we update the timestamp, if so desired
           if options[:touch]
             current_time = current_time_from_proper_timezone
@@ -304,8 +313,6 @@ module CounterCulture
               updates << "#{timestamp_column} = '#{current_time.to_formatted_s(:db)}'"
             end
           end
-
-          klass = relation_klass(options[:relation])
           klass.where(klass.primary_key => id_to_change).update_all updates.join(', ')
         end
       end
@@ -336,7 +343,6 @@ module CounterCulture
 
       prev
     end
-
     # gets the value of the foreign key on the given relation
     #
     # relation: a symbol or array of symbols; specifies the relation
@@ -344,17 +350,17 @@ module CounterCulture
     # was: whether to get the current or past value from ActiveRecord;
     #   pass true to get the past value, false or nothing to get the
     #   current value
-    def foreign_key_value(relation, was = false) # TODO may fail with polymorphic
+    def foreign_key_value(relation, was = false) # TODO fail with polymorphic when update to different class
       relation = relation.is_a?(Enumerable) ? relation.dup : [relation]
       if was
         first = relation.shift
         foreign_key_value = send("#{relation_foreign_key(first)}_was")
-        value = relation_klass(first).find(foreign_key_value) if foreign_key_value
+        value = relation_klass(first, was).find(foreign_key_value) if foreign_key_value
       else
         value = self
       end
       while !value.nil? && relation.size > 0
-        value = value.send(relation.shift)
+        value = value.send(relation.shift) # what if we updated records before?
       end
       return value.try(:id)
     end
@@ -364,41 +370,35 @@ module CounterCulture
       #
       # relation: a symbol or array of symbols; specifies the relation
       #   that has the counter cache column
-      def relation_reflect(relation) # TODO Maybe it's better to move it to instance methods (especialy for polymorphic assosiations)
+      def relation_reflect(relation, was = false)
         relation = relation.is_a?(Enumerable) ? relation.dup : [relation]
 
         # go from one relation to the next until we hit the last reflect object
-        # sine we use polimorpic assosiations, there is no way to dso it with only class information,
-        # but as we have instance, lets kick it too
         klass = self.class
         instance = self
         while relation.size > 0
           cur_relation = relation.shift
+
           reflect = klass.reflect_on_association(cur_relation)
           raise "No relation #{cur_relation} on #{klass.name}" if reflect.nil?
+          # Check if relation polymorphic and get through instance klass of relation
           if reflect.polymorphic?
-            klass = instance.send("#{cur_relation}_type").classify.constatize
+            method = was ? "#{cur_relation}_type_was" : "#{cur_relation}_type"
+            klass = instance.send(method).classify.constantize
           else
             klass = reflect.klass
           end
-          # It'll execute a SQL query
-          instance = instance.send(cur_relation)
         end
 
-        return reflect, instance
+        return reflect, klass
       end
 
       # gets the class of the given relation
       #
       # relation: a symbol or array of symbols; specifies the relation
       #   that has the counter cache column
-      def relation_klass(relation) # TODO same as below
-        reflect, instance = relation_reflect(relation)
-        if reflect.polymorphic? # TODO refactor it
-          klass = instance.send("#{cur_relation}_type").classify.constatize
-        else
-          klass = reflect.klass
-        end
+      def relation_klass(relation, was = false) # TODO same as below
+        reflect, klass = relation_reflect(relation, was)
         klass
       end
 
@@ -421,6 +421,10 @@ module CounterCulture
         relation_reflect(relation).first.foreign_key
       end
 
+      def first_polymorphic?(relation)
+        relation = relation.first if relation.is_a?(Enumerable)
+        relation_reflect(relation).first.polymorphic?
+      end
   end
 
   # extend ActiveRecord with our own code here

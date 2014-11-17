@@ -16,6 +16,7 @@ require 'models/post'
 require 'models/post_comment'
 require 'models/categ'
 require 'models/subcateg'
+require 'models/image'
 
 require 'database_cleaner'
 DatabaseCleaner.strategy = :deletion
@@ -188,9 +189,24 @@ describe "CounterCulture" do
       product = Product.create :category_id => Category.first.id
       Category.all {|category| expect(category.products_count).to eq 1 }
     end
+
+    it 'should increment polymorphic counter cache' do
+      user = User.create
+      company = Company.create
+
+      expect(user.reload.images_count).to eq 0
+      expect(company.reload.images_count).to eq 0
+
+      user_image = Image.create :owner => user
+
+      company_image = Image.create :owner => company
+
+      expect(user.reload.images_count).to eq 1
+      expect(company.reload.images_count).to eq 1
+    end
   end
 
-  describe 'destoroy' do
+  describe 'destroy' do
     it "should decrement counter cache" do
       user = User.create
       product = Product.create
@@ -434,10 +450,44 @@ describe "CounterCulture" do
       product.destroy
       Category.all {|category| expect(category.products_count).to eq 0 }
     end
+
+    it 'should decrement polymorphic counter cache' do
+      user = User.create
+      company = Company.create
+
+      expect(user.reload.images_count).to eq 0
+      expect(company.reload.images_count).to eq 0
+
+      user_image = Image.create :owner => user
+
+      company_image = Image.create :owner => company
+
+      expect(user.reload.images_count).to eq 1
+      expect(company.reload.images_count).to eq 1
+
+      user_image.destroy
+      company_image.destroy
+
+       expect(user.reload.images_count).to eq 0
+      expect(company.reload.images_count).to eq 0
+    end
   end
 
   describe 'update' do
-    it "should update count er cache" do
+    it 'should perform simple update' do
+      user1 = User.create
+      user2 = User.create
+      product = Product.create
+      review = Review.create :user_id => user1.id, :product_id => product.id
+
+      review.user = user2
+      review.save!
+
+      expect(user1.reload.reviews_count).to eq 0
+      expect(user2.reload.reviews_count).to eq 1
+    end
+
+    it "should update counter cache" do
       user1 = User.create
       user2 = User.create
       product = Product.create
@@ -775,6 +825,26 @@ describe "CounterCulture" do
       product.category = nil
       product.save!
       Category.all {|category| expect(category.products_count).to eq 0 }
+    end
+
+    it 'should update polymorphic counter cache' do
+      user = User.create
+      company = Company.create
+
+      expect(user.reload.images_count).to eq 0
+      expect(company.reload.images_count).to eq 0
+
+      user_image = Image.create :owner => user
+      company_image = Image.create :owner => company
+
+      expect(user.reload.images_count).to eq 1
+      expect(company.reload.images_count).to eq 1
+
+      user_image.owner = company
+      user_image.save!
+
+      expect(user.reload.images_count).to eq 0
+      expect(company.reload.images_count).to eq 2
     end
   end
 

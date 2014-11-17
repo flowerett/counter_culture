@@ -6,6 +6,8 @@ class User < ActiveRecord::Base
   belongs_to :has_string_id
   counter_culture :has_string_id
 
+  has_many :images
+
   has_many :reviews
   accepts_nested_attributes_for :reviews, :allow_destroy => true
 end
