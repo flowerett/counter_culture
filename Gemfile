@@ -9,7 +9,6 @@ group :development, :test do
   gem "rake"
   gem "rails", '>= 3.1.0'
   gem "rspec"
-  gem "after_commit_action"
   gem "awesome_print"
 end
 
