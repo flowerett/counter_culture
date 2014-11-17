@@ -1,22 +1,5 @@
 require File.expand_path(File.dirname(__FILE__) + '/spec_helper')
 
-require 'models/company'
-require 'models/industry'
-require 'models/product'
-require 'models/review'
-require 'models/twitter_review'
-require 'models/user'
-require 'models/category'
-require 'models/has_string_id'
-require 'models/simple_main'
-require 'models/simple_dependent'
-require 'models/conditional_main'
-require 'models/conditional_dependent'
-require 'models/post'
-require 'models/post_comment'
-require 'models/categ'
-require 'models/subcateg'
-
 require 'database_cleaner'
 DatabaseCleaner.strategy = :deletion
 
@@ -381,5 +364,17 @@ describe "CounterCulture" do
       expect(fixed.length).to eq 1
       expect(company.reload.children_count).to eq 1
     end
+  end
+
+  it 'should fix polymorphic assosiations' do
+    user = User.create
+    image = Image.create :owner => user
+
+    user.images_count = 12
+    user.save!
+    fixed = Image.counter_culture_fix_counts
+
+    expect(fixed.length).to eq 1
+    expect(user.reload.images_count).to eq 1
   end
 end

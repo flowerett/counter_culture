@@ -3,6 +3,8 @@ class Company < ActiveRecord::Base
   has_many :managers, :foreign_key => :manages_company_id
 
   has_many :images
+  has_many :videos
+  has_many :albums
 
   belongs_to :parent, :class_name => 'Company', :foreign_key => 'parent_id'
   has_many :children, :class_name => 'Company', :foreign_key => 'parent_id'

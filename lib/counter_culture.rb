@@ -99,31 +99,30 @@ module CounterCulture
             # store joins in an array so that we can later apply column-specific conditions
             joins = reverse_relation.map do |cur_relation|
               reflect, klasses = self.relation_reflect(cur_relation)
-
               joins_query_array = []
-              if reflect.polymorphic?
-                klasses.each do |poly_name|
-                  poly_class = poly_name.classify.constatize
-                  join_table_name = poly_class.table_name
-                  joins_query = "LEFT JOIN #{reflect.active_record.table_name} AS #{join_table_name} ON #{reflect.table_name}.#{reflect.klass.primary_key} = #{join_table_name}.#{reflect.foreign_key} AND #{reflect.table_name}.#{cur_relation}_type = #{poly_name}"
-                  joins_query_array << joins_query
-                end
+              if klass.table_name == reflect.active_record.table_name
+                join_table_name = "#{klass.table_name}_#{klass.table_name}"
               else
-                if klass.table_name == reflect.active_record.table_name
-                  join_table_name = "#{klass.table_name}_#{klass.table_name}"
-                else
-                  join_table_name = reflect.active_record.table_name
-                end
-                joins_query = "LEFT JOIN #{reflect.active_record.table_name} AS #{join_table_name} ON #{reflect.table_name}.#{reflect.klass.primary_key} = #{join_table_name}.#{reflect.foreign_key}"
-                # adds 'type' condition to JOIN clause if the current model is a child in a Single Table Inheritance
-                # join with alias to avoid ambiguous table name with self-referential models:
-                joins_query = "#{joins_query} AND #{reflect.active_record.table_name}.type IN ('#{self.name}')" if self.column_names.include?('type') and not(self.descends_from_active_record?)
-                joins_query_array << joins_query
+                join_table_name = reflect.active_record.table_name
               end
-              joins_query_array
+              if reflect.polymorphic?
+                joins_query = <<-SQL
+                  LEFT JOIN
+                    #{reflect.active_record.table_name} AS #{join_table_name}
+                    ON
+                      #{klass.table_name}.#{klass.primary_key} = #{join_table_name}.#{reflect.foreign_key}
+                      AND
+                      #{join_table_name}.#{reflect.foreign_type} = "#{klass.name}"
+                SQL
+                joins_query_array << joins_query
+              else
+                joins_query = "LEFT JOIN #{reflect.active_record.table_name} AS #{join_table_name} ON #{reflect.table_name}.#{reflect.klass.primary_key} = #{join_table_name}.#{reflect.foreign_key}"
+              end
+              # adds 'type' condition to JOIN clause if the current model is a child in a Single Table Inheritance
+              # join with alias to avoid ambiguous table name with self-referential models:
+              joins_query = "#{joins_query} AND #{reflect.active_record.table_name}.type IN ('#{self.name}')" if self.column_names.include?('type') and not(self.descends_from_active_record?)
+              joins_query
             end
-
-            joins = joins.flatten
 
             # iterate over all the possible counter cache column names
             column_names.each do |where, column_name|
@@ -189,7 +188,7 @@ module CounterCulture
           ok = reflects.all?{ |r| r.foreign_key == reflect.foreign_key } || reflects.all?{ |r| r.polymorphic? == reflect.polymorphic? }
           raise "Invalid relation" unless ok
           if reflect.polymorphic?
-            klasses = klasses.map { |k| polymorphic_klasses(k, cur_relation) }
+            klasses = klasses.map { |k| polymorphic_klasses(k, cur_relation) }.flatten.map{|k| k.classify.constantize }
           else
             klasses = [reflect.klass]
           end
@@ -385,6 +384,7 @@ module CounterCulture
           if reflect.polymorphic?
             method = was ? "#{cur_relation}_type_was" : "#{cur_relation}_type"
             klass = instance.send(method).classify.constantize
+            instance = instance.send("#{cur_relation}")
           else
             klass = reflect.klass
           end

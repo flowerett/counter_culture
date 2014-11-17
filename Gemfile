@@ -22,4 +22,5 @@ group :test do
   gem "sqlite3"
   gem "rspec-extra-formatters"
   gem "database_cleaner", ">= 1.1.1"
+  gem "after_commit_action"
 end

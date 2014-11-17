@@ -1,23 +1,4 @@
 require File.expand_path(File.dirname(__FILE__) + '/spec_helper')
-
-require 'models/company'
-require 'models/industry'
-require 'models/product'
-require 'models/review'
-require 'models/twitter_review'
-require 'models/user'
-require 'models/category'
-require 'models/has_string_id'
-require 'models/simple_main'
-require 'models/simple_dependent'
-require 'models/conditional_main'
-require 'models/conditional_dependent'
-require 'models/post'
-require 'models/post_comment'
-require 'models/categ'
-require 'models/subcateg'
-require 'models/image'
-
 require 'database_cleaner'
 DatabaseCleaner.strategy = :deletion
 
@@ -197,12 +178,36 @@ describe "CounterCulture" do
       expect(user.reload.images_count).to eq 0
       expect(company.reload.images_count).to eq 0
 
-      user_image = Image.create :owner => user
-
-      company_image = Image.create :owner => company
+      Image.create :owner => user
+      Image.create :owner => company
 
       expect(user.reload.images_count).to eq 1
       expect(company.reload.images_count).to eq 1
+    end
+
+    it 'should increment two-level polymorphic counter cache' do
+      user = User.create
+      company = Company.create
+
+      expect(user.reload.marks_count).to eq 0
+      expect(company.reload.marks_count).to eq 0
+
+      ui = Image.create :owner => user
+      ci = Image.create :owner => company
+      uv = Video.create :owner => user
+      cv = Video.create :owner => company
+
+      Mark.create :mark_out => ui
+      Mark.create :mark_out => ci
+      Mark.create :mark_out => uv
+      Mark.create :mark_out => cv
+
+      expect(ui.reload.marks_count).to eq 1
+      expect(ci.reload.marks_count).to eq 1
+      expect(uv.reload.marks_count).to eq 1
+      expect(cv.reload.marks_count).to eq 1
+      expect(user.reload.marks_count).to eq 2
+      expect(company.reload.marks_count).to eq 2
     end
   end
 
@@ -470,6 +475,41 @@ describe "CounterCulture" do
 
        expect(user.reload.images_count).to eq 0
       expect(company.reload.images_count).to eq 0
+    end
+
+    it 'should increment two-level polymorphic counter cache' do
+      user = User.create
+      company = Company.create
+
+      expect(user.reload.marks_count).to eq 0
+      expect(company.reload.marks_count).to eq 0
+
+      ui = Image.create :owner => user
+      ci = Image.create :owner => company
+      uv = Video.create :owner => user
+      cv = Video.create :owner => company
+
+      m_ui = Mark.create :mark_out => ui
+      m_ci = Mark.create :mark_out => ci
+      m_uv =Mark.create :mark_out => uv
+      m_cv =Mark.create :mark_out => cv
+
+      expect(ui.reload.marks_count).to eq 1
+      expect(ci.reload.marks_count).to eq 1
+      expect(uv.reload.marks_count).to eq 1
+      expect(cv.reload.marks_count).to eq 1
+      expect(user.reload.marks_count).to eq 2
+      expect(company.reload.marks_count).to eq 2
+
+      m_cv.destroy
+      m_ui.destroy
+
+      expect(ui.reload.marks_count).to eq 0
+      expect(ci.reload.marks_count).to eq 1
+      expect(uv.reload.marks_count).to eq 1
+      expect(cv.reload.marks_count).to eq 0
+      expect(user.reload.marks_count).to eq 1
+      expect(company.reload.marks_count).to eq 1
     end
   end
 
@@ -845,6 +885,41 @@ describe "CounterCulture" do
 
       expect(user.reload.images_count).to eq 0
       expect(company.reload.images_count).to eq 2
+    end
+
+    it 'should update two-level polymorphic counter cache' do
+      user = User.create
+      company = Company.create
+
+      expect(user.reload.marks_count).to eq 0
+      expect(company.reload.marks_count).to eq 0
+
+      ui = Image.create :owner => user
+      ci = Image.create :owner => company
+      uv = Video.create :owner => user
+      cv = Video.create :owner => company
+
+      m_ui = Mark.create :mark_out => ui
+      m_ci = Mark.create :mark_out => ci
+      m_uv = Mark.create :mark_out => uv
+      m_cv = Mark.create :mark_out => cv
+
+      expect(ui.reload.marks_count).to eq 1
+      expect(ci.reload.marks_count).to eq 1
+      expect(uv.reload.marks_count).to eq 1
+      expect(cv.reload.marks_count).to eq 1
+      expect(user.reload.marks_count).to eq 2
+      expect(company.reload.marks_count).to eq 2
+
+      m_cv.mark_out = ui
+      m_cv.save!
+
+      expect(ui.reload.marks_count).to eq 2
+      expect(ci.reload.marks_count).to eq 1
+      expect(uv.reload.marks_count).to eq 1
+      expect(cv.reload.marks_count).to eq 0
+      expect(user.reload.marks_count).to eq 3
+      expect(company.reload.marks_count).to eq 1
     end
   end
 

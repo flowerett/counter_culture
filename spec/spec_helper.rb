@@ -14,9 +14,12 @@ load "#{File.dirname(__FILE__)}/schema.rb"
 # in ./support/ and its subdirectories.
 Dir["#{File.dirname(__FILE__)}/support/**/*.rb"].each {|f| require f}
 
+
 ActiveRecord::Base.logger = Logger.new(STDOUT)
 ActiveRecord::Base.logger.level = 1
 
 RSpec.configure do |config|
   config.fail_fast = true
 end
+
+Dir["#{File.dirname(__FILE__)}/models/*.rb"].each {|f| require f }
