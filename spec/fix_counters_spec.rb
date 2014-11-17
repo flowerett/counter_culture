@@ -377,4 +377,27 @@ describe "CounterCulture" do
     expect(fixed.length).to eq 1
     expect(user.reload.images_count).to eq 1
   end
+
+  it 'should fix two-level polymorphic assosiations' do
+    user = User.create
+    company = Company.create
+    user_image = Image.create :owner => user
+    company_image = Image.create :owner => company
+
+    m_ui = Mark.create :mark_out => user_image
+    m_ci = Mark.create :mark_out => company_image
+
+    user.marks_count = 12
+    user.save!
+
+    company.marks_count = 12
+    company.save!
+    fixed = Mark.counter_culture_fix_counts
+
+    expect(fixed.length).to eq 2
+    expect(user_image.reload.marks_count).to eq 1
+    expect(company_image.reload.marks_count).to eq 1
+    expect(user.reload.marks_count).to eq 1
+    expect(company.reload.marks_count).to eq 1
+  end
 end

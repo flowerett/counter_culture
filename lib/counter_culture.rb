@@ -94,11 +94,12 @@ module CounterCulture
 
             # we need to work our way back from the end-point of the relation to this class itself;
             # make a list of arrays pointing to the second-to-last, third-to-last, etc.
-            reverse_relation = (1..hash[:relation].length).to_a.reverse.inject([]) {|a,i| a << hash[:relation][0,i]; a }
+             p 'reverse'
+             p reverse_relation = (1..hash[:relation].length).to_a.reverse.inject([]) {|a,i| a << hash[:relation][0,i]; a }
 
             # store joins in an array so that we can later apply column-specific conditions
             joins = reverse_relation.map do |cur_relation|
-              reflect, klasses = self.relation_reflect(cur_relation)
+              reflect, klasses = self.relation_reflect(cur_relation)  # TODO shit here
               joins_query_array = []
               if klass.table_name == reflect.active_record.table_name
                 join_table_name = "#{klass.table_name}_#{klass.table_name}"
@@ -175,7 +176,7 @@ module CounterCulture
       end
 
       def relation_reflect(relation)
-        relation = relation.is_a?(Enumerable) ? relation.dup : [relation]
+        p relation = relation.is_a?(Enumerable) ? relation.dup : [relation]
 
         # go from one relation to the next until we hit the last reflect object
         klasses = [self]
@@ -188,7 +189,7 @@ module CounterCulture
           ok = reflects.all?{ |r| r.foreign_key == reflect.foreign_key } || reflects.all?{ |r| r.polymorphic? == reflect.polymorphic? }
           raise "Invalid relation" unless ok
           if reflect.polymorphic?
-            klasses = klasses.map { |k| polymorphic_klasses(k, cur_relation) }.flatten.map{|k| k.classify.constantize }
+            p klasses = klasses.map { |k| polymorphic_klasses(k, cur_relation) }.flatten.map{|k| k.classify.constantize }
           else
             klasses = [reflect.klass]
           end
