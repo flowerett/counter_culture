@@ -73,7 +73,7 @@ module CounterCulture
           # if we're provided a custom set of column names with conditions, use them; just use the
           # column name otherwise
           # which class does this relation ultimately point to? that's where we have to start
-          klasses = relation_klass(hash[:relation]) # TODO array of reflection for polymorphic here
+          klasses = relation_klass(hash[:relation])
           klasses.each do |klass|
             query = klass
 
@@ -84,46 +84,33 @@ module CounterCulture
             end
 
             # if a delta column is provided use SUM, otherwise use COUNT
-            count_select = hash[:delta_column] ? "SUM(COALESCE(#{self_table_name}.#{hash[:delta_column]},0))" : "COUNT(#{self_table_name}.#{self.primary_key})" # TODO loop here
+
 
             # respect the deleted_at column if it exists
-            query = query.where("#{self.table_name}.deleted_at IS NULL") if self.column_names.include?('deleted_at') # TODO loop here
+
 
             column_names = hash[:column_names] || {nil => hash[:counter_cache_name]}
             raise ":column_names must be a Hash of conditions and column names" unless column_names.is_a?(Hash)
 
             # we need to work our way back from the end-point of the relation to this class itself;
             # make a list of arrays pointing to the second-to-last, third-to-last, etc.
-             p 'reverse'
-             p reverse_relation = (1..hash[:relation].length).to_a.reverse.inject([]) {|a,i| a << hash[:relation][0,i]; a }
+            reverse_relation = (1..hash[:relation].length).to_a.reverse.inject([]) {|a,i| a << hash[:relation][0,i]; a }
 
             # store joins in an array so that we can later apply column-specific conditions
-            joins = reverse_relation.map do |cur_relation|
-              reflect, klasses = self.relation_reflect(cur_relation)  # TODO shit here
-              joins_query_array = []
-              if klass.table_name == reflect.active_record.table_name
-                join_table_name = "#{klass.table_name}_#{klass.table_name}"
-              else
-                join_table_name = reflect.active_record.table_name
-              end
-              if reflect.polymorphic?
-                joins_query = <<-SQL
-                  LEFT JOIN
-                    #{reflect.active_record.table_name} AS #{join_table_name}
-                    ON
-                      #{klass.table_name}.#{klass.primary_key} = #{join_table_name}.#{reflect.foreign_key}
-                      AND
-                      #{join_table_name}.#{reflect.foreign_type} = "#{klass.name}"
-                SQL
-                joins_query_array << joins_query
-              else
-                joins_query = "LEFT JOIN #{reflect.active_record.table_name} AS #{join_table_name} ON #{reflect.table_name}.#{reflect.klass.primary_key} = #{join_table_name}.#{reflect.foreign_key}"
-              end
-              # adds 'type' condition to JOIN clause if the current model is a child in a Single Table Inheritance
-              # join with alias to avoid ambiguous table name with self-referential models:
-              joins_query = "#{joins_query} AND #{reflect.active_record.table_name}.type IN ('#{self.name}')" if self.column_names.include?('type') and not(self.descends_from_active_record?)
+            last_union_name = klass.table_name
+            last_primary_key = klass.primary_key
+            klasses = [klass]
+            joins = []
+            first = reverse_relation.shift
+            joins << build_joins(first, last_union_name, last_primary_key, klasses, true).first
+            joins << reverse_relation.map do |cur_relation|
+              joins_query, last_union_name, last_primary_key, klasses = build_joins(cur_relation, last_union_name, last_primary_key, klasses)
               joins_query
             end
+
+            count_select = hash[:delta_column] ? "SUM(COALESCE(#{self_table_name}.#{hash[:delta_column]},0))" : "COUNT(#{last_union_name}.#{last_primary_key})"
+
+            #query = query.where("#{last_union_name}.deleted_at IS NULL") if self.column_names.include?('deleted_at')
 
             # iterate over all the possible counter cache column names
             column_names.each do |where, column_name|
@@ -175,8 +162,43 @@ module CounterCulture
         "#{klass.quoted_table_name}.#{klass.quoted_primary_key}"
       end
 
+      def build_joins( cur_relation, last_union_name, last_primary_key, klasses, first = false)
+        reflects, k = self.relation_reflect(cur_relation)
+        klasses = k unless first
+        reflects = reflects.dup
+        reflect = reflects.shift # All reflects are differ only by active_record field
+        if reflect.polymorphic?
+          reflect_name = reflect.name
+          join_table_name = reflect.active_record.table_name
+          klasses << reflect.active_record
+          union = "SELECT #{join_table_name}.#{reflect.active_record.primary_key} as primary_key_#{reflect_name}, #{join_table_name}.#{reflect.foreign_key} as #{reflect.foreign_key}, #{join_table_name}.#{reflect.foreign_type} as #{reflect.foreign_type} FROM #{join_table_name}"
+          reflects.each do |r|
+            join_table_name = r.active_record.table_name
+            klasses << r.active_record
+            union += " UNION SELECT #{join_table_name}.#{r.active_record.primary_key} as primary_key_#{reflect_name}, #{join_table_name}.#{r.foreign_key} as #{reflect.foreign_key}, #{join_table_name}.#{r.foreign_type} as #{reflect.foreign_type} FROM #{join_table_name}"
+          end
+          klasses_pretty = klasses.map(&:name).map{|s| "'#{s}'"}.join(' , ')
+          joins_query = "LEFT JOIN (#{union}) AS join_query_#{reflect_name} ON #{last_union_name}.#{last_primary_key} = join_query_#{reflect_name}.#{reflect.foreign_key} AND join_query_#{reflect_name}.#{reflect.foreign_type} IN (#{klasses_pretty})"
+          last_union_name = "join_query_#{reflect_name}"
+          last_primary_key = "primary_key_#{reflect_name}"
+        else
+          if klass.table_name == reflect.active_record.table_name
+            join_table_name = "#{klass.table_name}_#{klass.table_name}"
+          else
+            join_table_name = reflect.active_record.table_name
+          end
+          last_union_name = "#{reflect.table_name}"
+          last_primary_key = "#{reflect.klass.primary_key}"
+          joins_query = "LEFT JOIN #{reflect.active_record.table_name} AS #{join_table_name} ON #{reflect.table_name}.#{reflect.klass.primary_key} = #{join_table_name}.#{reflect.foreign_key}"
+        end
+        # adds 'type' condition to JOIN clause if the current model is a child in a Single Table Inheritance
+        # join with alias to avoid ambiguous table name with self-referential models:
+        joins_query = "#{joins_query} AND #{reflect.active_record.table_name}.type IN ('#{self.name}')" if self.column_names.include?('type') and not(self.descends_from_active_record?)
+        return joins_query, last_union_name, last_primary_key, klasses
+      end
+
       def relation_reflect(relation)
-        p relation = relation.is_a?(Enumerable) ? relation.dup : [relation]
+        relation = relation.is_a?(Enumerable) ? relation.dup : [relation]
 
         # go from one relation to the next until we hit the last reflect object
         klasses = [self]
@@ -185,21 +207,21 @@ module CounterCulture
           cur_relation = relation.shift
           reflects = klasses.map{ |k| k.reflect_on_association(cur_relation)}
           raise "No relation #{cur_relation} on #{klass.name}" if reflects.compact.size != klasses.size
-          reflect = reflects.first
+          reflect = reflects.first  # TODO not right, because of first table
           ok = reflects.all?{ |r| r.foreign_key == reflect.foreign_key } || reflects.all?{ |r| r.polymorphic? == reflect.polymorphic? }
           raise "Invalid relation" unless ok
           if reflect.polymorphic?
-            p klasses = klasses.map { |k| polymorphic_klasses(k, cur_relation) }.flatten.map{|k| k.classify.constantize }
+            klasses = klasses.map { |k| polymorphic_klasses(k, cur_relation) }.flatten.map{|k| k.classify.constantize }
           else
             klasses = [reflect.klass]
           end
         end
 
-        return reflect, klasses
+        return reflects, klasses
       end
 
       def relation_klass(relation) # TODO same as below
-        reflect, klasses = relation_reflect(relation)
+        reflects, klasses = relation_reflect(relation)
         klasses
       end
 

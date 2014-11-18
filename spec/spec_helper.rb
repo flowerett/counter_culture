@@ -16,7 +16,7 @@ Dir["#{File.dirname(__FILE__)}/support/**/*.rb"].each {|f| require f}
 
 
 ActiveRecord::Base.logger = Logger.new(STDOUT)
-ActiveRecord::Base.logger.level = 1
+ActiveRecord::Base.logger.level = 0
 
 RSpec.configure do |config|
   config.fail_fast = true
