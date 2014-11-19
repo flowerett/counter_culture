@@ -1,5 +1,5 @@
 require 'fix_counters'
-require 'execute_after_commit'
+require 'after_commit_action'
 
 module CounterCulture
 
