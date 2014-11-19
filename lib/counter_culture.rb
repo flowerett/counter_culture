@@ -36,15 +36,7 @@ module CounterCulture
           :touch => options[:touch]
         }
       end
-
-
-
-      # the string to pass to order() in order to sort by primary key
-      def full_primary_key(klass)
-        "#{klass.quoted_table_name}.#{klass.quoted_primary_key}"
-      end
     end
-
 
     private
     # need to make sure counter_culture is only activated once
@@ -52,9 +44,7 @@ module CounterCulture
     # we would be triggered twice within the same transaction -- once
     # for the create, once for the update
     def _wrap_in_counter_culture_active(&block) # TODO find better patern
-      if @_counter_culture_active
-        # don't do anything; we are already active for this transaction
-      else
+      unless @_counter_culture_active # don't do anything; we are already active for this transaction
         @_counter_culture_active = true
         block.call
         execute_after_commit { @_counter_culture_active = false}

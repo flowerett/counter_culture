@@ -227,8 +227,8 @@ module FixCounters
       while relation.size > 0
         cur_relation = relation.shift
         reflects = klasses.map{ |k| k.reflect_on_association(cur_relation)}
-        raise "No relation #{cur_relation} on #{klass.name}" if reflects.compact.size != klasses.size
-        reflect = reflects.first  # TODO not right, because of first table
+        raise "No relation #{cur_relation} on some of #{klasses.map(&:name)}" if reflects.compact.size != klasses.size
+        reflect = reflects.first
         ok = reflects.all?{ |r| r.foreign_key == reflect.foreign_key } || reflects.all?{ |r| r.polymorphic? == reflect.polymorphic? }
         raise "Invalid relation" unless ok
         if reflect.polymorphic?
@@ -242,11 +242,15 @@ module FixCounters
     end
 
     def relation_klass(relation) # TODO same as below
-      reflects, klasses = relation_reflect(relation)
-      klasses
+      relation_reflect(relation).last
     end
 
     private
+
+    # the string to pass to order() in order to sort by primary key
+    def full_primary_key(klass)
+      "#{klass.quoted_table_name}.#{klass.quoted_primary_key}"
+    end
 
     # TODO move to separate module
     def polymorphic_klasses(klass, cur_relation)
