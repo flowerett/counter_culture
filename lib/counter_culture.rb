@@ -212,6 +212,7 @@ module CounterCulture
             instance = klass.find_by(klass.primary_key => instance.send(id_method))
           else
             klass = reflect.klass
+            instance = instance.send(relation)
           end
         end
 
