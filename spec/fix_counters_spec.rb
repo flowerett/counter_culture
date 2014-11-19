@@ -32,6 +32,7 @@ describe "CounterCulture" do
     product.save!
 
     fixed = Review.counter_culture_fix_counts :skip_unsupported => true
+    pp fixed
     expect(fixed.length).to eq 3
 
     user.reload
@@ -361,6 +362,7 @@ describe "CounterCulture" do
       company.save!
 
       fixed = Company.counter_culture_fix_counts
+      p fixed
       expect(fixed.length).to eq 1
       expect(company.reload.children_count).to eq 1
     end
@@ -381,6 +383,7 @@ describe "CounterCulture" do
   it 'should fix two-level polymorphic assosiations' do
     user = User.create
     company = Company.create
+    Image.create(:owner => user)
     user_image = Image.create :owner => user
     company_image = Image.create :owner => company
     user_video = Video.create :owner => user
@@ -398,7 +401,7 @@ describe "CounterCulture" do
     company.save!
     fixed = Mark.counter_culture_fix_counts
 
-   # expect(fixed.length).to eq 2
+    expect(fixed.length).to eq 2
     pp fixed
     expect(user_image.reload.marks_count).to eq 1
     expect(company_image.reload.marks_count).to eq 1

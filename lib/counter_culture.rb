@@ -102,8 +102,9 @@ module CounterCulture
             klasses = [klass]
             joins = []
             first = reverse_relation.shift
-            joins << build_joins(first, last_union_name, last_primary_key, klasses, true).first
-            joins << reverse_relation.map do |cur_relation|
+            joins_query, last_union_name, last_primary_key, klasses = build_joins(first, last_union_name, last_primary_key, klasses, true)
+            joins << joins_query
+            joins += reverse_relation.map do |cur_relation|
               joins_query, last_union_name, last_primary_key, klasses = build_joins(cur_relation, last_union_name, last_primary_key, klasses)
               joins_query
             end
@@ -113,6 +114,7 @@ module CounterCulture
             #query = query.where("#{last_union_name}.deleted_at IS NULL") if self.column_names.include?('deleted_at')
 
             # iterate over all the possible counter cache column names
+            p column_names
             column_names.each do |where, column_name|
               # select id and count (from above) as well as cache column ('column_name') for later comparison
               counts_query = query.select("#{klass.table_name}.#{klass.primary_key}, #{count_select} AS count, #{klass.table_name}.#{column_name}")
@@ -162,33 +164,35 @@ module CounterCulture
         "#{klass.quoted_table_name}.#{klass.quoted_primary_key}"
       end
 
-      def build_joins( cur_relation, last_union_name, last_primary_key, klasses, first = false)
-        reflects, k = self.relation_reflect(cur_relation)
-        klasses = k unless first
+      def build_joins( cur_relation, last_union_name, last_primary_key, k, first = false)
+        reflects, klasses = self.relation_reflect(cur_relation)
+        klasses = k if first
         reflects = reflects.dup
         reflect = reflects.shift # All reflects are differ only by active_record field
         if reflect.polymorphic?
           reflect_name = reflect.name
           join_table_name = reflect.active_record.table_name
           klasses << reflect.active_record
-          union = "SELECT #{join_table_name}.#{reflect.active_record.primary_key} as primary_key_#{reflect_name}, #{join_table_name}.#{reflect.foreign_key} as #{reflect.foreign_key}, #{join_table_name}.#{reflect.foreign_type} as #{reflect.foreign_type} FROM #{join_table_name}"
+          union = "SELECT #{join_table_name}.#{reflect.active_record.primary_key} as primary_key_#{reflect_name}, #{join_table_name}.#{reflect.foreign_key} as #{reflect.foreign_key}, #{join_table_name}.#{reflect.foreign_type} as #{reflect.foreign_type}, '#{reflect.active_record.name}' as next_join_type FROM #{join_table_name}"
           reflects.each do |r|
             join_table_name = r.active_record.table_name
-            klasses << r.active_record
-            union += " UNION SELECT #{join_table_name}.#{r.active_record.primary_key} as primary_key_#{reflect_name}, #{join_table_name}.#{r.foreign_key} as #{reflect.foreign_key}, #{join_table_name}.#{r.foreign_type} as #{reflect.foreign_type} FROM #{join_table_name}"
+           # klasses << r.active_record
+            union += " UNION SELECT #{join_table_name}.#{r.active_record.primary_key} as primary_key_#{reflect_name}, #{join_table_name}.#{r.foreign_key} as #{reflect.foreign_key}, #{join_table_name}.#{r.foreign_type} as #{reflect.foreign_type}, '#{r.active_record.name}' as next_join_type FROM #{join_table_name}"
           end
           klasses_pretty = klasses.map(&:name).map{|s| "'#{s}'"}.join(' , ')
-          joins_query = "LEFT JOIN (#{union}) AS join_query_#{reflect_name} ON #{last_union_name}.#{last_primary_key} = join_query_#{reflect_name}.#{reflect.foreign_key} AND join_query_#{reflect_name}.#{reflect.foreign_type} IN (#{klasses_pretty})"
+          type = first ? "'#{k.first.name}'" : "#{last_union_name}.next_join_type"
+          joins_query = "LEFT JOIN (#{union}) AS join_query_#{reflect_name} ON #{last_union_name}.#{last_primary_key} = join_query_#{reflect_name}.#{reflect.foreign_key} AND join_query_#{reflect_name}.#{reflect.foreign_type} = #{type}"
           last_union_name = "join_query_#{reflect_name}"
           last_primary_key = "primary_key_#{reflect_name}"
         else
+          klass = klasses.first
           if klass.table_name == reflect.active_record.table_name
             join_table_name = "#{klass.table_name}_#{klass.table_name}"
           else
             join_table_name = reflect.active_record.table_name
           end
-          last_union_name = "#{reflect.table_name}"
-          last_primary_key = "#{reflect.klass.primary_key}"
+          last_union_name = "#{join_table_name}"
+          last_primary_key = "#{reflect.active_record.primary_key}"
           joins_query = "LEFT JOIN #{reflect.active_record.table_name} AS #{join_table_name} ON #{reflect.table_name}.#{reflect.klass.primary_key} = #{join_table_name}.#{reflect.foreign_key}"
         end
         # adds 'type' condition to JOIN clause if the current model is a child in a Single Table Inheritance
