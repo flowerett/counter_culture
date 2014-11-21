@@ -80,10 +80,9 @@ module CounterCulture
           # with dynamic column names)
           counter_cache_name_was = counter_cache_name_for(previous_model, hash[:counter_cache_name])
           counter_cache_name = counter_cache_name_for(self, hash[:counter_cache_name])
-          if send("#{first_level_relation_foreign_key(hash[:relation])}_changed?") ||
+          if RelationTracer.first_changed?(hash[:relation], self) ||
             (hash[:delta_column] && send("#{hash[:delta_column]}_changed?")) ||
-            counter_cache_name != counter_cache_name_was ||
-            (first_polymorphic?(hash[:relation]) && send("#{hash[:relation].first.to_s}_type_changed?"))
+            counter_cache_name != counter_cache_name_was || try("#{hash[:relation].first.to_s}_type_changed?")
 
             # increment the counter cache of the new value
             change_counter_cache(hash.merge(:increment => true, :counter_column => counter_cache_name)) # unless try(:deleted_at_changed?)
@@ -107,11 +106,13 @@ module CounterCulture
     def change_counter_cache(options)
       options[:counter_column] = counter_cache_name_for(self, options[:counter_cache_name]) unless options.has_key?(:counter_column)
 
+
+      tracer = RelationTracer.new(options[:relation], self, options[:was])
       # default to the current foreign key value
-      id_to_change = foreign_key_value(options[:relation], options[:was])
+      id_to_change = tracer.id_to_change
       # allow overwriting of foreign key value by the caller
       id_to_change = options[:foreign_key_values].call(id_to_change) if options[:foreign_key_values]
-      klass = relation_klass(options[:relation], options[:was])
+      klass = tracer.klass
       if id_to_change && options[:counter_column]
         delta_magnitude = if options[:delta_column]
                             delta_attr_name = options[:was] ? "#{options[:delta_column]}_was" : options[:delta_column]
@@ -166,6 +167,68 @@ module CounterCulture
 
       prev
     end
+
+    class RelationTracer
+      def initialize(relation, instance, was = false)
+        @relations = relation.is_a?(Enumerable) ? relation : [relation]
+        @klass = instance.class
+        @instance = instance
+        @was = was
+        @traced = false
+      end
+
+      def self.first_changed?(relation, instance)
+        relation = relation.is_a?(Enumerable) ? relation.first : relation
+        reflect = instance.class.reflect_on_association(relation)
+        instance.send("#{reflect.foreign_key}_changed?") || instance.try("#{reflect.foreign_type}_changed?")
+      end
+
+      def foreign_key
+        trace_relation
+        @reflect.foreign_key
+      end
+
+      def foreign_type
+        trace_relation
+        @reflect.foreign_type
+      end
+
+      def id_to_change
+        trace_relation
+        @foreign_key_value
+      end
+
+      def klass
+        trace_relation
+        @klass
+      end
+
+      private
+
+      def trace_relation # TOO complicated
+        return @traced if @traced
+        @relations.each do |relation|
+          @reflect = @klass.reflect_on_association(relation)
+          raise "No relation #{relation} on #{@klass.name}" if @reflect.nil?
+
+          if @reflect.polymorphic?
+            type_method = @was ? "#{@reflect.foreign_type}_was" : "#{@reflect.foreign_type}"
+            @klass = @instance.send(type_method).try(:classify).try(:constantize)
+          else
+            @klass = @reflect.klass
+          end
+
+          break if @klass.nil?
+
+          id_method = @was ? "#{@reflect.foreign_key}_was" : "#{@reflect.foreign_key}"
+          @foreign_key_value = @instance.send(id_method)
+          @instance = @klass.find_by(@klass.primary_key => @foreign_key_value)
+
+          break if @instance.nil?
+        end
+        @traced = true
+      end
+    end
     # gets the value of the foreign key on the given relation
     #
     # relation: a symbol or array of symbols; specifies the relation
@@ -174,10 +237,9 @@ module CounterCulture
     #   pass true to get the past value, false or nothing to get the
     #   current value
     def foreign_key_value(relation, was = false) # TODO fail with polymorphic when update to different class
-      relation = relation.is_a?(Enumerable) ? relation.dup : [relation]
+      relation =
       if was
-        first = relation.shift
-        foreign_key_value = send("#{relation_foreign_key(first)}_was")
+        foreign_key_value = send("#{relation_foreign_key(relation)}_was")
         value = relation_klass(first, was).find(foreign_key_value) if foreign_key_value
       else
         value = self
@@ -208,15 +270,15 @@ module CounterCulture
           if reflect.polymorphic?
             type_method = was ? "#{reflect.foreign_type}_was" : "#{reflect.foreign_type}"
             id_method = was ? "#{reflect.foreign_key}_was" : "#{reflect.foreign_key}"
-            klass = instance.send(type_method).classify.constantize
+            klass = instance.send(type_method).classify.constantize #TODO can be null
             instance = klass.find_by(klass.primary_key => instance.send(id_method))
           else
             klass = reflect.klass
-            instance = instance.send(relation)
+            instance = klass.find_by(klass.primary_key => instance.try(reflect.foreign_key))
           end
         end
 
-        return reflect, klass
+        return reflect, klass, instance
       end
 
       # gets the class of the given relation
@@ -224,8 +286,7 @@ module CounterCulture
       # relation: a symbol or array of symbols; specifies the relation
       #   that has the counter cache column
       def relation_klass(relation, was = false) # TODO same as below
-        reflect, klass = relation_reflect(relation, was)
-        klass
+        relation_reflect(relation, was).second
       end
 
       # gets the foreign key name of the given relation

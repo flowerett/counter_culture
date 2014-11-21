@@ -15,8 +15,8 @@ describe "CounterCulture" do
       expect(user.reviews_count).to eq 0
       expect(product.reviews_count).to eq 0
       expect(user.review_approvals_count).to eq 0
-
-      user.reviews.create :user_id => user.id, :product_id => product.id, :approvals => 13
+      p Product.all
+      Review.create :user_id => user.id, :product_id => product.id, :approvals => 13
 
       user.reload
       product.reload
@@ -920,6 +920,33 @@ describe "CounterCulture" do
       expect(cv.reload.marks_count).to eq 0
       expect(user.reload.marks_count).to eq 3
       expect(company.reload.marks_count).to eq 1
+    end
+
+    it 'should update polymorpic-straight association cascade' do
+      user = User.create
+      company = Company.create
+      album_user = Album.create :owner => user
+      album_company = Album.create :owner => company
+      expect(user.reload.album_images_count).to eq 0
+      expect(company.reload.album_videos_count).to eq 0
+
+      image1 = Image.create :album => album_user
+      Image.create :album => album_company
+      Video.create :album => album_user
+      Video.create :album => album_company
+
+      expect(user.reload.album_images_count).to eq 1
+      expect(user.reload.album_videos_count).to eq 1
+      expect(company.reload.album_images_count).to eq 1
+      expect(company.reload.album_videos_count).to eq 1
+
+      image1.album = album_company
+      image1.save!
+
+      expect(user.reload.album_images_count).to eq 0
+      expect(user.reload.album_videos_count).to eq 1
+      expect(company.reload.album_images_count).to eq 2
+      expect(company.reload.album_videos_count).to eq 1
     end
   end
 

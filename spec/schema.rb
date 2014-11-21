@@ -24,6 +24,8 @@ ActiveRecord::Schema.define(:version => 20120522160158) do
     t.integer  "images_count",           :default => 0, :null => false
     t.integer  "videos_count",           :default => 0, :null => false
     t.integer  "marks_count",            :default => 0, :null => false
+    t.integer  "album_images_count",    :default => 0, :null => false
+    t.integer  "album_videos_count",    :default => 0, :null => false
     t.integer  "parent_id"
     t.integer  "children_count",         :default => 0, :null => false
     t.datetime "created_at"
@@ -74,6 +76,8 @@ ActiveRecord::Schema.define(:version => 20120522160158) do
     t.integer  "images_count",           :default => 0, :null => false
     t.integer  "videos_count",           :default => 0, :null => false
     t.integer  "marks_count",            :default => 0, :null => false
+    t.integer  "album_images_count",    :default => 0, :null => false
+    t.integer  "album_videos_count",    :default => 0, :null => false
     t.string   "has_string_id_id"
     t.float    "review_value_sum",       :default => 0.0, :null => false
     t.datetime "created_at"
@@ -150,16 +154,18 @@ ActiveRecord::Schema.define(:version => 20120522160158) do
   end
 
   create_table "images", force: true do |t|
-    t.integer  "owner_id", null: false
-    t.string   "owner_type", null: false
+    t.integer  "owner_id"
+    t.string   "owner_type"
+    t.string   "album_id"
     t.datetime "created_at", :null => false
     t.datetime "updated_at", :null => false
     t.integer  "marks_count", :default => 0, :null => false
   end
 
   create_table "videos", force: true do |t|
-    t.integer  "owner_id", null: false
-    t.string   "owner_type", null: false
+    t.integer  "owner_id"
+    t.string   "owner_type"
+    t.string   "album_id"
     t.datetime "created_at", :null => false
     t.datetime "updated_at", :null => false
     t.integer  "marks_count", :default => 0, :null => false
@@ -168,6 +174,14 @@ ActiveRecord::Schema.define(:version => 20120522160158) do
    create_table "marks", force: true do |t|
     t.integer  "mark_out_id", null: false
     t.string   "mark_out_type", null: false
+    t.datetime "deleted_at"
+    t.datetime "created_at", :null => false
+    t.datetime "updated_at", :null => false
+  end
+
+  create_table "albums", force: true do |t|
+    t.integer  "owner_id", null: false
+    t.string   "owner_type", null: false
     t.datetime "deleted_at"
     t.datetime "created_at", :null => false
     t.datetime "updated_at", :null => false
