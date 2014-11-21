@@ -205,113 +205,34 @@ module CounterCulture
 
       private
 
-      def trace_relation # TOO complicated
-        return @traced if @traced
-        @relations.each do |relation|
-          @reflect = @klass.reflect_on_association(relation)
-          raise "No relation #{relation} on #{@klass.name}" if @reflect.nil?
-
-          if @reflect.polymorphic?
-            type_method = @was ? "#{@reflect.foreign_type}_was" : "#{@reflect.foreign_type}"
-            @klass = @instance.send(type_method).try(:classify).try(:constantize)
-          else
-            @klass = @reflect.klass
-          end
-
-          break if @klass.nil?
-
-          id_method = @was ? "#{@reflect.foreign_key}_was" : "#{@reflect.foreign_key}"
-          @foreign_key_value = @instance.send(id_method)
-          @instance = @klass.find_by(@klass.primary_key => @foreign_key_value)
-
-          break if @instance.nil?
+      def trace_klass
+        @klass = if @reflect.polymorphic?
+          type_method = @was ? "#{@reflect.foreign_type}_was" : "#{@reflect.foreign_type}"
+          @instance.send(type_method).try(:classify).try(:constantize)
+        else
+          @reflect.klass
         end
+      end
+
+      def trace_instance
+        id_method = @was ? "#{@reflect.foreign_key}_was" : "#{@reflect.foreign_key}"
+        @foreign_key_value = @instance.send(id_method)
+        @instance = @klass.find_by(@klass.primary_key => @foreign_key_value)
+        @instance
+      end
+
+      def trace_relation
+        unless @traced
+          @relations.each do |relation|
+            @reflect = @klass.reflect_on_association(relation)
+            raise "No relation #{relation} on #{@klass.name}" if @reflect.nil?
+            break if trace_klass.nil? || trace_instance.nil?
+          end
+        end
+
         @traced = true
       end
     end
-    # gets the value of the foreign key on the given relation
-    #
-    # relation: a symbol or array of symbols; specifies the relation
-    #   that has the counter cache column
-    # was: whether to get the current or past value from ActiveRecord;
-    #   pass true to get the past value, false or nothing to get the
-    #   current value
-    def foreign_key_value(relation, was = false) # TODO fail with polymorphic when update to different class
-      relation =
-      if was
-        foreign_key_value = send("#{relation_foreign_key(relation)}_was")
-        value = relation_klass(first, was).find(foreign_key_value) if foreign_key_value
-      else
-        value = self
-      end
-      while !value.nil? && relation.size > 0
-        value = value.send(relation.shift) # what if we updated records before?
-      end
-      return value.try(:id)
-    end
-
-
-      # gets the reflect object on the given relation
-      #
-      # relation: a symbol or array of symbols; specifies the relation
-      #   that has the counter cache column
-      def relation_reflect(relation, was = false)
-        relation = relation.is_a?(Enumerable) ? relation.dup : [relation]
-
-        # go from one relation to the next until we hit the last reflect object
-        klass = self.class
-        instance = self
-        while relation.size > 0
-          cur_relation = relation.shift
-
-          reflect = klass.reflect_on_association(cur_relation)
-          raise "No relation #{cur_relation} on #{klass.name}" if reflect.nil?
-          # Check if relation polymorphic and get through instance klass of relation
-          if reflect.polymorphic?
-            type_method = was ? "#{reflect.foreign_type}_was" : "#{reflect.foreign_type}"
-            id_method = was ? "#{reflect.foreign_key}_was" : "#{reflect.foreign_key}"
-            klass = instance.send(type_method).classify.constantize #TODO can be null
-            instance = klass.find_by(klass.primary_key => instance.send(id_method))
-          else
-            klass = reflect.klass
-            instance = klass.find_by(klass.primary_key => instance.try(reflect.foreign_key))
-          end
-        end
-
-        return reflect, klass, instance
-      end
-
-      # gets the class of the given relation
-      #
-      # relation: a symbol or array of symbols; specifies the relation
-      #   that has the counter cache column
-      def relation_klass(relation, was = false) # TODO same as below
-        relation_reflect(relation, was).second
-      end
-
-      # gets the foreign key name of the given relation
-      #
-      # relation: a symbol or array of symbols; specifies the relation
-      #   that has the counter cache column
-      def relation_foreign_key(relation)
-        relation_reflect(relation).first.foreign_key
-      end
-
-      # gets the foreign key name of the relation. will look at the first
-      # level only -- i.e., if passed an array will consider only its
-      # first element
-      #
-      # relation: a symbol or array of symbols; specifies the relation
-      #   that has the counter cache column
-      def first_level_relation_foreign_key(relation)
-        relation = relation.first if relation.is_a?(Enumerable)
-        relation_reflect(relation).first.foreign_key
-      end
-
-      def first_polymorphic?(relation)
-        relation = relation.first if relation.is_a?(Enumerable)
-        relation_reflect(relation).first.polymorphic?
-      end
   end
 
   # extend ActiveRecord with our own code here
