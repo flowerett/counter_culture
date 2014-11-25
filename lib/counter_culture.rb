@@ -1,4 +1,5 @@
 require 'counter_culture/helpers/relation_tracer'
+require 'counter_culture/helpers/join_builder'
 require 'counter_culture/fixer'
 require 'counter_culture/counter'
 require 'after_commit_action'
