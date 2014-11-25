@@ -45,7 +45,7 @@ module CounterCulture
         end
       end
 
-      def trace_instance
+      def trace_instance # TOO MANY global variables maybe send some as argument
         id_method = @was ? "#{@reflect.foreign_key}_was" : "#{@reflect.foreign_key}"
         @foreign_key_value = @instance.send(id_method)
         @instance = @klass.find_by(@klass.primary_key => @foreign_key_value)
@@ -64,4 +64,55 @@ module CounterCulture
         @traced = true
       end
     end
+
+      class StaticTracer
+
+        def initialize(relations, klass)
+          @relations = relations
+          @klasses = [klass]
+        end
+
+        def klasses
+          trace
+          @klasses
+        end
+
+        def reflections
+          trace
+          @reflections
+        end
+
+        private
+
+        def traced?
+          @traced
+        end
+
+        def trace
+          return if traced?
+
+          @relations.each do |relation|
+            @reflections = @klasses.map{ |k| k.reflect_on_association(relation)}
+            raise "No relation #{relation} on some of #{@klasses.map(&:name)}" if @reflections.compact.size != @klasses.size
+            raise 'Invalid relations' unless check_reflections
+            reflect = @reflections.first
+            if reflect.polymorphic?
+              @klasses = @klasses.map { |k| polymorphic_klasses(k, relation) }.flatten.map{|k| k.classify.constantize }
+            else
+              @klasses = [reflect.klass]
+            end
+          end
+
+          @traced = true
+        end
+
+        def check_reflections
+          reflect = @reflections.first
+          @reflections.all?{ |r| r.foreign_key == reflect.foreign_key && r.polymorphic? == reflect.polymorphic? && r.foreign_type == reflect.foreign_type }
+        end
+
+        def polymorphic_klasses(klass, cur_relation)
+          klass.group("#{cur_relation}_type").pluck("#{cur_relation}_type")
+        end
+      end
 end

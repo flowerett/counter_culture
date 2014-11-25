@@ -18,7 +18,8 @@ module CounterCulture
         private
 
         def build_joins_step(cur_relation)
-          @reflects, @klasses = @main_klass.relation_reflect(cur_relation)
+          tracer = StaticTracer.new(cur_relation, @main_klass)
+          @reflects, @klasses = tracer.reflections, tracer.klasses
           @reflect = @reflects.first
           # All reflects are differ only by active_record field
           join_query =  @reflect.polymorphic? ? build_polymorphic : build_simple
