@@ -56,7 +56,7 @@ module CounterCulture
 
             # store joins in an array so that we can later apply column-specific conditions
 
-            builder = JoinBuilder.new(reverse_relation, klass, self, hash[:union_load_columns])
+            builder = JoinBuilder.new(reverse_relation, klass, self)
             joins = builder.build_joins
 
             # if a delta column is provided use SUM, otherwise use COUNT
