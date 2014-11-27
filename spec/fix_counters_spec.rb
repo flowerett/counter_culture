@@ -380,7 +380,7 @@ describe "CounterCulture" do
     expect(user.reload.images_count).to eq 1
   end
 
-  it 'should fix two-level polymorphic assosiations' do
+  it 'should fix two-level polymorphic associations' do
     user = User.create
     company = Company.create
     Image.create(:owner => user)
@@ -402,12 +402,26 @@ describe "CounterCulture" do
     fixed = Mark.counter_culture_fix_counts
 
     expect(fixed.length).to eq 2
-    pp fixed
     expect(user_image.reload.marks_count).to eq 1
     expect(company_image.reload.marks_count).to eq 1
     expect(user_video.reload.marks_count).to eq 1
     expect(company_video.reload.marks_count).to eq 1
     expect(user.reload.marks_count).to eq 2
     expect(company.reload.marks_count).to eq 2
+  end
+
+  it 'should fix polymorphic through strain associations' do
+    user = User.create
+    company = Company.create
+    album_user = Album.create :owner => user
+    album_company = Album.create :owner => company
+    Image.create :album => album_user
+    Image.create :album => album_company
+    user.update(:album_images_count => 120)
+    company.update(:album_images_count => 120)
+    fixed = Image.counter_culture_fix_counts
+    expect(fixed.length).to eq 2
+    expect(user.reload.album_images_count).to eq 1
+    expect(company.reload.album_images_count).to eq 1
   end
 end

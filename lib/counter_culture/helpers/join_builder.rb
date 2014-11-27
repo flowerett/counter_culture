@@ -67,14 +67,14 @@ module CounterCulture
           else
             join_table_name = @reflect.active_record.table_name
           end
-          @last_union_name = "#{join_table_name}"
-          @last_primary_key = "#{@reflect.active_record.primary_key}"
           joins_query = build_join(
             @reflect.active_record.table_name,
             join_table_name,
-            "#{@reflect.table_name}.#{@reflect.klass.primary_key}",
+            "#{@last_union_name}.#{@last_primary_key}",
             "#{join_table_name}.#{@reflect.foreign_key}"
           )
+          @last_union_name = "#{join_table_name}"
+          @last_primary_key = "#{@reflect.active_record.primary_key}"
           joins_query
         end
 

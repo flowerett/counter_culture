@@ -97,7 +97,7 @@ module CounterCulture
             raise 'Invalid relations' unless check_reflections
             reflect = @reflections.first
             if reflect.polymorphic?
-              @klasses = @klasses.map { |k| polymorphic_klasses(k, relation) }.flatten.map{|k| k.classify.constantize }
+              @klasses = @klasses.map { |k| polymorphic_klasses(k, relation) }.flatten.map{|k| k.classify.constantize if k.present? }.compact
             else
               @klasses = [reflect.klass]
             end
