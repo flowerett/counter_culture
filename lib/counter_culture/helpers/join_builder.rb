@@ -1,13 +1,14 @@
 module CounterCulture
   class JoinBuilder
     attr_reader :last_union_name, :last_primary_key
-    def initialize(reverse_relation, klass, main_klass)
+    def initialize(reverse_relation, klass, main_klass, union_columns)
       @reverse_relation= reverse_relation
       @klass = klass
       @last_union_name = klass.table_name
       @last_primary_key = klass.primary_key
       @join_klass = klass
       @main_klass = main_klass
+      @union_columns = union_columns
     end
 
     def build_joins
@@ -85,6 +86,8 @@ module CounterCulture
     def build_union(reflect)
       join_table_name = reflect.active_record.table_name
       reflect_name = reflect.name
+      other_columns = @union_column.try(:joins, ', ')
+      other_columns = ", #{join_table_name}.#{other_columns}" if other_columns.present?
       query_wrapper(
         <<-SQL
           SELECT
@@ -92,6 +95,7 @@ module CounterCulture
         #{join_table_name}.#{reflect.foreign_key} as #{reflect.foreign_key},
         #{join_table_name}.#{reflect.foreign_type} as #{reflect.foreign_type},
         '#{reflect.active_record.name}' as next_join_type
+        #{other_columns}
           FROM #{join_table_name}
         SQL
       )

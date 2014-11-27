@@ -26,7 +26,8 @@ module CounterCulture
           :column_names => options[:column_names],
           :delta_column => options[:delta_column],
           :foreign_key_values => options[:foreign_key_values],
-          :touch => options[:touch]
+          :touch => options[:touch],
+          :union_load_columns => options[:union_load_columns].is_a?(Enumerable) ? options[:union_load_columns] : [options[:union_load_columns]]
         }
       end
     end
