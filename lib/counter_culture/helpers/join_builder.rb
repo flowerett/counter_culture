@@ -33,7 +33,7 @@ module CounterCulture
 
     def build_polymorphic
       # Build special type of join with union for polymorphic reflections
-      # example:
+      # examples:
       #  LEFT JOIN
       #   (
       #     SELECT images.id as primary_key_owner, images.owner_id as owner_id, images.owner_type as owner_type, 'Image' as next_join_type FROM images
@@ -41,10 +41,11 @@ module CounterCulture
       #     SELECT videos.id as primary_key_owner, videos.owner_id as owner_id, videos.owner_type as owner_type, 'Video' as next_join_type FROM videos
       #   )
       #   AS join_query_owner ON join_query_owner.owner_id = companies.id ANDjoin_query_owner.owner_type = 'Company'
-      #     LEFT JOIN
-      #      (
+      #
+      #   LEFT JOIN
+      #   (
       #     SELECT marks.id as primary_key_mark_out, marks.mark_out_id as mark_out_id, marks.mark_out_type as mark_out_type, 'Mark' as next_join_type FROM marks
-      #      )
+      #   )
       #     AS join_query_mark_out ON join_query_mark_out.mark_out_id = join_query_owner.primary_key_owner AND join_query_mark_out.mark_out_type = join_query_owner.next_join_type
       joins_query = build_join(
         @reflects.map {|r| build_union(r)}.join(" UNION "),
