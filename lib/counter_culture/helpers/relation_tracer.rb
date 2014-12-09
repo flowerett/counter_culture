@@ -1,7 +1,8 @@
 module CounterCulture
   class RelationTracer
-    def initialize(relation, instance, was = false)
-      @relations = relation.is_a?(Enumerable) ? relation : [relation]
+    def initialize(relation, instance, was = false, only = [])
+      @relations = relation.is_a?(Enumerable) ? relation : [relation] # array
+      @only = only.is_a?(Enumerable) ? only.dup : nil # hash or array
       @klass = instance.class
       @instance = instance
       @was = was
@@ -43,6 +44,12 @@ module CounterCulture
       else
         @reflect.klass
       end
+      if @only.present?
+        sumbol_name = @klass.name.underscore.to_sym
+        test_name = @only.shift
+        @klass = test_name.try(:include?, sumbol_name) || test_name == sumbol_name ? @klass : nil
+      end
+      @klass
     end
 
     def trace_instance # TOO MANY global variables maybe send some as argument

@@ -26,7 +26,11 @@ module CounterCulture
           :column_names => options[:column_names],
           :delta_column => options[:delta_column],
           :foreign_key_values => options[:foreign_key_values],
-          :touch => options[:touch]
+          :touch => options[:touch],
+          # Can be hash, array or symbol, array will be used only on first level
+          # example { video => user }, only increment counter when first level is Video second is User classes
+          # hashes can be nested like { video => { user => { .. }}}
+          :only => options[:only].is_a?(Enumerable) ? options[:only] : options[:only].present? ? [options[:only]] : nil
         }
       end
     end
@@ -98,15 +102,14 @@ module CounterCulture
     def change_counter_cache(options)
       options[:counter_column] = counter_cache_name_for(self, options[:counter_cache_name]) unless options.has_key?(:counter_column)
 
-
-      tracer = RelationTracer.new(options[:relation], self, options[:was])
+      tracer = RelationTracer.new(options[:relation], self, options[:was], options[:only])
       # default to the current foreign key value
       id_to_change = tracer.id_to_change
       # allow overwriting of foreign key value by the caller
       id_to_change = options[:foreign_key_values].call(id_to_change) if options[:foreign_key_values]
       klass = tracer.klass
       # TODO add option :foreign_type_values
-      if id_to_change && options[:counter_column]
+      if id_to_change && klass && options[:counter_column]
         delta_magnitude = if options[:delta_column]
                             delta_attr_name = options[:was] ? "#{options[:delta_column]}_was" : options[:delta_column]
                             self.send(delta_attr_name) || 0

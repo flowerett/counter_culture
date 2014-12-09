@@ -399,7 +399,7 @@ describe "CounterCulture" do
 
     company.marks_count = 12
     company.save!
-    fixed = Mark.counter_culture_fix_counts
+    fixed = Mark.counter_culture_fix_counts :skip_unsupported => true
 
     expect(fixed.length).to eq 2
     expect(user_image.reload.marks_count).to eq 1

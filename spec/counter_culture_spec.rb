@@ -185,12 +185,27 @@ describe "CounterCulture" do
       expect(company.reload.images_count).to eq 1
     end
 
+    it 'should increment some of polymorphic counter cache in first level' do
+      user = User.create
+      company = Company.create
+
+      expect(user.reload.images_count).to eq 0
+      expect(company.reload.images_count).to eq 0
+
+      Image.create :owner => user
+      Image.create :owner => company
+
+      expect(user.reload.images_count).to eq 1
+      expect(company.reload.images_count).to eq 1
+    end
+
     it 'should increment two-level polymorphic counter cache' do
       user = User.create
       company = Company.create
 
       expect(user.reload.marks_count).to eq 0
       expect(company.reload.marks_count).to eq 0
+      expect(user.reload.marks_video_count).to eq 0
 
       ui = Image.create :owner => user
       ci = Image.create :owner => company
@@ -206,6 +221,7 @@ describe "CounterCulture" do
       expect(ci.reload.marks_count).to eq 1
       expect(uv.reload.marks_count).to eq 1
       expect(cv.reload.marks_count).to eq 1
+      expect(user.reload.marks_video_count).to eq 1
       expect(user.reload.marks_count).to eq 2
       expect(company.reload.marks_count).to eq 2
     end
@@ -477,11 +493,12 @@ describe "CounterCulture" do
       expect(company.reload.images_count).to eq 0
     end
 
-    it 'should increment two-level polymorphic counter cache' do
+    it 'should decrement two-level polymorphic counter cache' do
       user = User.create
       company = Company.create
 
       expect(user.reload.marks_count).to eq 0
+      expect(user.reload.marks_video_count).to eq 0
       expect(company.reload.marks_count).to eq 0
 
       ui = Image.create :owner => user
@@ -498,16 +515,18 @@ describe "CounterCulture" do
       expect(ci.reload.marks_count).to eq 1
       expect(uv.reload.marks_count).to eq 1
       expect(cv.reload.marks_count).to eq 1
+      expect(user.reload.marks_video_count).to eq 1
       expect(user.reload.marks_count).to eq 2
       expect(company.reload.marks_count).to eq 2
 
       m_cv.destroy
-      m_ui.destroy
+      m_uv.destroy
 
-      expect(ui.reload.marks_count).to eq 0
+      expect(ui.reload.marks_count).to eq 1
       expect(ci.reload.marks_count).to eq 1
-      expect(uv.reload.marks_count).to eq 1
+      expect(uv.reload.marks_count).to eq 0
       expect(cv.reload.marks_count).to eq 0
+      expect(user.reload.marks_video_count).to eq 0
       expect(user.reload.marks_count).to eq 1
       expect(company.reload.marks_count).to eq 1
     end
@@ -892,6 +911,7 @@ describe "CounterCulture" do
       company = Company.create
 
       expect(user.reload.marks_count).to eq 0
+      expect(user.reload.marks_video_count).to eq 0
       expect(company.reload.marks_count).to eq 0
 
       ui = Image.create :owner => user
@@ -908,16 +928,18 @@ describe "CounterCulture" do
       expect(ci.reload.marks_count).to eq 1
       expect(uv.reload.marks_count).to eq 1
       expect(cv.reload.marks_count).to eq 1
+      expect(user.reload.marks_video_count).to eq 1
       expect(user.reload.marks_count).to eq 2
       expect(company.reload.marks_count).to eq 2
 
-      m_cv.mark_out = ui
+      m_cv.mark_out = uv
       m_cv.save!
 
-      expect(ui.reload.marks_count).to eq 2
+      expect(ui.reload.marks_count).to eq 1
       expect(ci.reload.marks_count).to eq 1
-      expect(uv.reload.marks_count).to eq 1
+      expect(uv.reload.marks_count).to eq 2
       expect(cv.reload.marks_count).to eq 0
+      expect(user.reload.marks_video_count).to eq 2
       expect(user.reload.marks_count).to eq 3
       expect(company.reload.marks_count).to eq 1
     end

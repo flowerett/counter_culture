@@ -76,8 +76,9 @@ ActiveRecord::Schema.define(:version => 20120522160158) do
     t.integer  "images_count",           :default => 0, :null => false
     t.integer  "videos_count",           :default => 0, :null => false
     t.integer  "marks_count",            :default => 0, :null => false
-    t.integer  "album_images_count",    :default => 0, :null => false
-    t.integer  "album_videos_count",    :default => 0, :null => false
+    t.integer  "marks_video_count",     :default => 0, :null => false
+    t.integer  "album_images_count",     :default => 0, :null => false
+    t.integer  "album_videos_count",     :default => 0, :null => false
     t.string   "has_string_id_id"
     t.float    "review_value_sum",       :default => 0.0, :null => false
     t.datetime "created_at"

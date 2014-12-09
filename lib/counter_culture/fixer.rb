@@ -29,9 +29,10 @@ module CounterCulture
           next if options[:only] && !options[:only].include?(hash[:relation])
 
           if options[:skip_unsupported]
-            next if (hash[:foreign_key_values] || (hash[:counter_cache_name].is_a?(Proc) && !hash[:column_names]))
+            next if (hash[:only] || hash[:foreign_key_values] || (hash[:counter_cache_name].is_a?(Proc) && !hash[:column_names]))
           else
             raise "Fixing counter caches is not supported when using :foreign_key_values; you may skip this relation with :skip_unsupported => true" if hash[:foreign_key_values]
+            raise "Only option is unsuported in counter_culture_fix_counts, if you want fix other counters, you may use skip_unsupported flag" if hash[:only]
             raise "Must provide :column_names option for relation #{hash[:relation].inspect} when :column_name is a Proc; you may skip this relation with :skip_unsupported => true" if hash[:counter_cache_name].is_a?(Proc) && !hash[:column_names]
           end
 
