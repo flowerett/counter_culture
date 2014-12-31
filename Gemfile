@@ -3,6 +3,8 @@ source "https://rubygems.org"
 # Example:
 #   gem "activesupport", ">= 2.3.5"
 
+gem "activerecord", ">= 3.0.0"
+
 # Add dependencies to develop your gem here.
 # Include everything needed to run rake, tests, features, etc.
 group :development, :test do
@@ -10,7 +12,7 @@ group :development, :test do
   gem "rails", '>= 3.1.0'
   gem "rspec"
   gem "awesome_print"
-  gem "after_commit_action"
+  gem "after_commit_action", "~> 0.1.3"
 end
 
 group :development do

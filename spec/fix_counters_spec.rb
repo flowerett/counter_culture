@@ -66,6 +66,7 @@ describe "CounterCulture" do
     user = User.create :manages_company_id => company.id
     product = Product.create
 
+    expect(company.twitter_reviews_count).to eq 0
     expect(product.twitter_reviews_count).to eq 0
 
     review = Review.create :user_id => user.id, :product_id => product.id, :approvals => 42
@@ -75,15 +76,20 @@ describe "CounterCulture" do
     user.reload
     product.reload
 
+    expect(company.twitter_reviews_count).to eq 1
     expect(product.twitter_reviews_count).to eq 1
 
+    company.twitter_reviews_count = 2
     product.twitter_reviews_count = 2
+    company.save!
     product.save!
 
     TwitterReview.counter_culture_fix_counts
 
     product.reload
+    company.reload
 
+    expect(company.twitter_reviews_count).to eq 1
     expect(product.twitter_reviews_count).to eq 1
   end
 

@@ -25,8 +25,8 @@ module CounterCulture
       join_query =  @reflect.polymorphic? ? build_polymorphic : build_simple
       # adds 'type' condition to JOIN clause if the current model is a child in a Single Table Inheritance
       # join with alias to avoid ambiguous table name with self-referential models:
-      if @main_klass.column_names.include?('type') and not(@main_klass.descends_from_active_record?)
-        join_query = "#{join_query} AND #{@reflect.active_record.table_name}.type IN ('#{@main_klass.name}')"
+      if @reflect.active_record.column_names.include?('type') && !(@main_klass.descends_from_active_record?) && !@reflect.polymorphic?
+        join_query = "#{join_query} AND #{@last_union_name}.type IN ('#{@main_klass.name}')"
       end
       join_query
     end
