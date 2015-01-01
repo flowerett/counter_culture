@@ -14,9 +14,15 @@ load "#{File.dirname(__FILE__)}/schema.rb"
 # in ./support/ and its subdirectories.
 Dir["#{File.dirname(__FILE__)}/support/**/*.rb"].each {|f| require f}
 
+
 ActiveRecord::Base.logger = Logger.new(STDOUT)
-ActiveRecord::Base.logger.level = 1
+ActiveRecord::Base.logger.level = 0
 
 RSpec.configure do |config|
   config.fail_fast = true
 end
+
+# I don't known why, but its not working other way, but on my other machine it works perfectly (WTF?)
+require "#{File.dirname(__FILE__)}/models/review.rb"
+require "#{File.dirname(__FILE__)}/models/twitter_review.rb"
+Dir["#{File.dirname(__FILE__)}/models/*.rb"].each {|f| require f }

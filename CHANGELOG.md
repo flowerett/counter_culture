@@ -1,3 +1,13 @@
+## 0.1.29 (December 25, 2014)
+
+Bugfixes:
+  - Fix fixing counts with multi-level STI models
+
+## 0.1.28 (December 7, 2014)
+
+Bugfixes:
+  - fixes development and test dependencies
+
 ## 0.1.27 (November 13, 2014)
 
 Bugfixes:

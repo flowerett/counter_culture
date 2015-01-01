@@ -16,40 +16,46 @@ ActiveRecord::Schema.define(:version => 20120522160158) do
   create_table "companies", :force => true do |t|
     t.string   "name"
     t.integer  "industry_id"
-    t.integer  "reviews_count",       :default => 0, :null => false
-    t.integer  "using_count",         :default => 0, :null => false
-    t.integer  "tried_count",         :default => 0, :null => false
-    t.integer  "managers_count",      :default => 0, :null => false
-    t.integer  "review_approvals_count",      :default => 0, :null => false
+    t.integer  "reviews_count",          :default => 0, :null => false
+    t.integer "twitter_reviews_count", :default => 0, :null => false
+    t.integer  "using_count",            :default => 0, :null => false
+    t.integer  "tried_count",            :default => 0, :null => false
+    t.integer  "managers_count",         :default => 0, :null => false
+    t.integer  "review_approvals_count", :default => 0, :null => false
+    t.integer  "images_count",           :default => 0, :null => false
+    t.integer  "videos_count",           :default => 0, :null => false
+    t.integer  "marks_count",            :default => 0, :null => false
+    t.integer  "album_images_count",    :default => 0, :null => false
+    t.integer  "album_videos_count",    :default => 0, :null => false
     t.integer  "parent_id"
-    t.integer  "children_count",      :default => 0, :null => false
+    t.integer  "children_count",         :default => 0, :null => false
     t.datetime "created_at"
     t.datetime "updated_at"
   end
 
   create_table "industries", :force => true do |t|
     t.string   "name"
-    t.integer  "reviews_count",       :default => 0, :null => false
-    t.integer  "rexiews_count",       :default => 0, :null => false
-    t.integer  "using_count",         :default => 0, :null => false
-    t.integer  "tried_count",         :default => 0, :null => false
-    t.integer  "review_approvals_count",      :default => 0, :null => false
+    t.integer  "reviews_count",          :default => 0, :null => false
+    t.integer  "rexiews_count",          :default => 0, :null => false
+    t.integer  "using_count",            :default => 0, :null => false
+    t.integer  "tried_count",            :default => 0, :null => false
+    t.integer  "review_approvals_count", :default => 0, :null => false
     t.datetime "created_at"
     t.datetime "updated_at"
   end
 
   create_table "products", :force => true do |t|
     t.string   "name"
-    t.integer  "reviews_count",       :default => 0, :null => false
-    t.integer  "rexiews_count",       :default => 0, :null => false
-    t.integer  "twitter_reviews_count",       :default => 0, :null => false
+    t.integer  "reviews_count",          :default => 0, :null => false
+    t.integer  "rexiews_count",          :default => 0, :null => false
+    t.integer  "twitter_reviews_count",  :default => 0, :null => false
     t.integer  "category_id"
     t.datetime "created_at"
     t.datetime "updated_at"
   end
 
   create_table "reviews", :force => true do |t|
-    t.string   "review_type",                :default => "using"
+    t.string   "review_type",            :default => "using"
     t.string   "some_text"
     t.integer  "user_id"
     t.integer  "product_id"
@@ -64,28 +70,34 @@ ActiveRecord::Schema.define(:version => 20120522160158) do
     t.string   "name"
     t.integer  "company_id"
     t.integer  "manages_company_id"
-    t.integer  "reviews_count",       :default => 0, :null => false
-    t.integer  "using_count",         :default => 0, :null => false
-    t.integer  "tried_count",         :default => 0, :null => false
-    t.integer  "review_approvals_count",      :default => 0, :null => false
+    t.integer  "reviews_count",          :default => 0, :null => false
+    t.integer  "using_count",            :default => 0, :null => false
+    t.integer  "tried_count",            :default => 0, :null => false
+    t.integer  "review_approvals_count", :default => 0, :null => false
+    t.integer  "images_count",           :default => 0, :null => false
+    t.integer  "videos_count",           :default => 0, :null => false
+    t.integer  "marks_count",            :default => 0, :null => false
+    t.integer  "marks_video_count",     :default => 0, :null => false
+    t.integer  "album_images_count",     :default => 0, :null => false
+    t.integer  "album_videos_count",     :default => 0, :null => false
     t.string   "has_string_id_id"
-    t.float    "review_value_sum",    :default => 0.0, :null => false
+    t.float    "review_value_sum",       :default => 0.0, :null => false
     t.datetime "created_at"
     t.datetime "updated_at"
   end
 
   create_table "categories", :force => true do |t|
     t.string   "name"
-    t.integer  "products_count",       :default => 0, :null => false
-    t.integer  "posts_count",       :default => 0, :null => false
+    t.integer  "products_count", :default => 0, :null => false
+    t.integer  "posts_count",    :default => 0, :null => false
     t.datetime "created_at"
     t.datetime "updated_at"
   end
 
   create_table "has_string_ids", :force => true, :id => false do |t|
-    t.string   "id", :default => '', :null => false
+    t.string   "id",          :default => '', :null => false
     t.string   "something"
-    t.integer  "users_count",        :null => false, :default => 0
+    t.integer  "users_count", :null => false, :default => 0
     t.datetime "created_at"
     t.datetime "updated_at"
   end
@@ -139,6 +151,40 @@ ActiveRecord::Schema.define(:version => 20120522160158) do
 
   create_table "post_comments", :primary_key => "post_id", :force => true do |t|
     t.string   "comment"
+    t.datetime "created_at", :null => false
+    t.datetime "updated_at", :null => false
+  end
+
+  create_table "images", force: true do |t|
+    t.integer  "owner_id"
+    t.string   "owner_type"
+    t.string   "album_id"
+    t.datetime "created_at", :null => false
+    t.datetime "updated_at", :null => false
+    t.integer  "marks_count", :default => 0, :null => false
+  end
+
+  create_table "videos", force: true do |t|
+    t.integer  "owner_id"
+    t.string   "owner_type"
+    t.string   "album_id"
+    t.datetime "created_at", :null => false
+    t.datetime "updated_at", :null => false
+    t.integer  "marks_count", :default => 0, :null => false
+  end
+
+   create_table "marks", force: true do |t|
+    t.integer  "mark_out_id", null: false
+    t.string   "mark_out_type", null: false
+    t.datetime "deleted_at"
+    t.datetime "created_at", :null => false
+    t.datetime "updated_at", :null => false
+  end
+
+  create_table "albums", force: true do |t|
+    t.integer  "owner_id", null: false
+    t.string   "owner_type", null: false
+    t.datetime "deleted_at"
     t.datetime "created_at", :null => false
     t.datetime "updated_at", :null => false
   end
